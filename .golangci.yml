@@ -1,0 +1,17 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - unconvert
+    - usestdlibvars
+    - sloglint
+formatters:
+  enable:
+    - gofmt
+    - goimports
