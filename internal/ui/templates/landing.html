@@ -1,0 +1,50 @@
+{{define "landing"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Artitrove</title>
+{{template "assets"}}
+</head>
+<body class="page">
+{{if .Index}}{{template "slim-header"}}
+{{if .Artifacts}}<section class="index">
+<div class="index-top"><h2>Artifacts</h2><span class="meta" id="count">{{if eq (len .Artifacts) 1}}1 artifact{{else}}{{len .Artifacts}} artifacts{{end}}</span></div>
+<div class="filters" hidden>
+<input class="search" id="q" type="search" placeholder="Filter by title" aria-label="Filter by title or type">
+<div class="chips">
+<button type="button" class="chip" data-kind="" aria-pressed="true">all</button>
+<button type="button" class="chip" data-kind="html" aria-pressed="false">html</button>
+<button type="button" class="chip" data-kind="markdown" aria-pressed="false">markdown</button>
+<button type="button" class="chip" data-kind="json" aria-pressed="false">json</button>
+<button type="button" class="chip" data-kind="text" aria-pressed="false">text</button>
+<button type="button" class="chip" data-kind="binary" aria-pressed="false">other</button>
+</div>
+</div>
+<ul class="list">
+{{range .Artifacts}}<li data-kind="{{.Kind}}"><a href="/a/{{.ID}}"><span class="t"><bdi>{{or .Title .ID}}</bdi></span><span class="m type type-{{.Kind}}"><bdi>{{.ContentType}}</bdi></span><span class="m sz">{{size .Size}}</span><time class="m ago" datetime="{{rfc3339 .CreatedAt}}" title="{{when .CreatedAt}}">{{when .CreatedAt}}</time></a></li>
+{{end}}</ul>
+<p class="empty" id="empty" hidden>No artifacts match that filter.</p>
+</section>
+{{else}}<section class="index"><div class="index-top"><h2>Artifacts</h2></div><p class="empty">No artifacts yet.</p></section>
+{{end}}{{end}}<div class="home">
+{{if not .Index}}<div class="home-head">{{template "mark"}}<b>Artitrove</b></div>
+{{end}}<h2>One home for the files your agents make.</h2>
+<p class="lead">Agents upload a file and get a link. Open the link on any device for a readable view, or fetch the raw file from another agent.</p>
+<p class="eyebrow">Upload</p>
+<div class="cmd">
+<pre id="curl"><code>curl -sS --data-binary @report.html \
+  -H <span class="s">"Authorization: Bearer $ARTITROVE_TOKEN"</span> \
+  -H <span class="s">"Content-Type: text/html"</span> \
+  <span class="s">"{{.BaseURL}}/api/artifacts?title=Latency+report"</span></code></pre>
+<button type="button" class="btn copy-curl" hidden>Copy</button>
+</div>
+<div class="two">
+<div><h3>For people</h3><p>Rendered Markdown, a JSON tree, and sandboxed HTML, sized for a phone.</p><code>/a/{id}</code></div>
+<div><h3>For agents</h3><p>The exact bytes, with the original content type.</p><code>/a/{id}/raw</code></div>
+</div>
+</div>
+</body>
+</html>
+{{end}}

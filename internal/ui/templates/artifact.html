@@ -1,0 +1,33 @@
+{{define "artifact"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{or .Title .ID}}</title>
+{{if eq .Kind "markdown"}}<link rel="stylesheet" href="/static/highlight.css">
+{{end}}{{template "assets"}}
+</head>
+<body class="{{if eq .Kind "html"}}page-html{{else}}page{{end}}">
+<header class="label">
+<a class="mark" href="/" aria-label="Artitrove home">{{template "mark"}}</a>
+<div class="label-main">
+<h1><bdi>{{or .Title .ID}}</bdi></h1>
+<div class="meta"><span class="type type-{{.Kind}}"><bdi>{{.ContentType}}</bdi></span><span>{{size .Size}}</span><time datetime="{{rfc3339 .CreatedAt}}">{{when .CreatedAt}}</time></div>
+</div>
+<div class="actions">
+<a class="btn" href="/a/{{.ID}}/raw">{{template "icon-raw"}}<span class="txt">{{if eq .Kind "html"}}Open full page{{else}}Open raw{{end}}</span></a>
+<details class="share"><summary class="btn primary" data-url="{{.URL}}">{{template "icon-link"}}<span class="txt">Copy link</span></summary>
+<div class="share-box"><input type="text" readonly value="{{.URL}}" aria-label="Link to this artifact"></div></details>
+</div>
+</header>
+{{if eq .Kind "html"}}<iframe sandbox="allow-scripts" src="/a/{{.ID}}/raw" title="{{or .Title .ID}}"></iframe>
+{{else if eq .Kind "markdown"}}<article class="reading">{{.Body}}</article>
+{{else if eq .Kind "json"}}<div class="json-view">{{.Body}}</div>
+{{else if eq .Kind "text"}}<pre class="text">
+{{.Text}}</pre>
+{{else}}<div class="reading file"><p class="meta"><bdi>{{.ContentType}}</bdi><span>{{size .Size}}</span></p><p>This file type has no preview.</p><a class="btn primary" href="/a/{{.ID}}/raw" download="{{or .Title .ID}}">Download</a></div>
+{{end}}{{if ne .Kind "html"}}<p class="foot">Agents: fetch <code>/a/{{.ID}}/raw</code> for the original file.</p>
+{{end}}</body>
+</html>
+{{end}}
