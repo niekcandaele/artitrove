@@ -58,10 +58,28 @@ func Register(mux *http.ServeMux, cfg config.Config, store artifact.Store) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+	mux.HandleFunc("/api/", apiFallback)
 	mux.Handle("GET /a/{id}/raw", RawHandler(store))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+}
+
+// apiFallback answers what no /api route matched in JSON: 405 with Allow for a known path, else 404.
+func apiFallback(w http.ResponseWriter, r *http.Request) {
+	allow := ""
+	switch rest, _ := strings.CutPrefix(r.URL.Path, "/api/artifacts"); {
+	case rest == "":
+		allow = "POST"
+	case len(rest) > 1 && rest[0] == '/' && !strings.Contains(rest[1:], "/"):
+		allow = "DELETE, GET, HEAD"
+	}
+	if allow == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	w.Header().Set("Allow", allow)
+	writeError(w, http.StatusMethodNotAllowed, "method "+r.Method+" not allowed; use "+allow)
 }
 
 // uploadReadTimeout bounds how long an authenticated upload may take to arrive.
