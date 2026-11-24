@@ -91,7 +91,10 @@ func view(cfg config.Config, store artifact.Store, raw http.Handler) http.Handle
 			}
 			switch kind {
 			case render.KindMarkdown:
-				if page.Body, err = render.Markdown(src); err != nil {
+				switch page.Body, err = render.Markdown(r.Context(), src); {
+				case errors.Is(err, render.ErrTooLarge):
+					kind = render.KindText
+				case err != nil:
 					serverError(w, "render markdown", err)
 					return
 				}

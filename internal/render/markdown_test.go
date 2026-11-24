@@ -1,6 +1,8 @@
 package render
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -8,7 +10,7 @@ import (
 
 func md1(t *testing.T, src string) string {
 	t.Helper()
-	out, err := Markdown([]byte(src))
+	out, err := Markdown(t.Context(), []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +153,7 @@ func TestMarkdownFeatures(t *testing.T) {
 
 func TestMarkdownConcurrent(t *testing.T) {
 	src := []byte("```go\nfunc main() {}\n```\n\n```html\n<b>x</b>\n```\n\n|a|b|\n|:-:|--:|\n|1|2|\n\n[a](https://e) [b](javascript:1)\n")
-	want, err := Markdown(src)
+	want, err := Markdown(t.Context(), src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +161,7 @@ func TestMarkdownConcurrent(t *testing.T) {
 	for range 8 {
 		wg.Go(func() {
 			for range 50 {
-				got, err := Markdown(src)
+				got, err := Markdown(t.Context(), src)
 				if err != nil || got != want {
 					t.Error("concurrent result differs")
 					return
@@ -170,11 +172,38 @@ func TestMarkdownConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestMarkdownLargeNotHighlighted(t *testing.T) {
-	fence := "```go\nfunc main() {}\n```\n"
-	src := fence + strings.Repeat("x", maxHighlightSize)
-	out := md1(t, src)
-	if strings.Contains(out, "hl-chroma") || !strings.Contains(out, "<pre><code>func main() {}\n</code></pre>") {
-		t.Errorf("large source: %.200s", out)
+func TestMarkdownTooLarge(t *testing.T) {
+	if _, err := Markdown(t.Context(), []byte(strings.Repeat("[a](", maxMarkdownSize/4+1))); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("err = %v, want ErrTooLarge", err)
+	}
+	if _, err := Markdown(t.Context(), []byte(strings.Repeat("x", maxMarkdownSize))); err != nil {
+		t.Errorf("source at the cap: %v", err)
+	}
+}
+
+func TestMarkdownHighlightBudgetIsPerDocument(t *testing.T) {
+	block := "```go\n" + strings.Repeat("x := 1\n", highlightBudget/8/2) + "```\n\n"
+	out := md1(t, strings.Repeat(block, 4))
+	if got := strings.Count(out, "hl-chroma"); got != 2 {
+		t.Errorf("highlighted blocks = %d, want 2 (budget %d bytes)", got, highlightBudget)
+	}
+	if got := strings.Count(out, "<pre><code>"); got != 2 {
+		t.Errorf("plain blocks = %d, want 2", got)
+	}
+}
+
+func TestMarkdownWaitEndsWithContext(t *testing.T) {
+	for range cap(renderSlots) {
+		renderSlots <- struct{}{}
+	}
+	t.Cleanup(func() {
+		for range cap(renderSlots) {
+			<-renderSlots
+		}
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := Markdown(ctx, []byte("# x")); !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
 	}
 }
