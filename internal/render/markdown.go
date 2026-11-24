@@ -164,8 +164,13 @@ func plainText(n ast.Node, source []byte) string {
 		switch c := c.(type) {
 		case *ast.Text:
 			sb.Write(c.Segment.Value(source))
+			if c.SoftLineBreak() || c.HardLineBreak() {
+				sb.WriteByte(' ')
+			}
 		case *ast.String:
 			sb.Write(c.Value)
+		case *ast.AutoLink:
+			sb.Write(c.Label(source))
 		default:
 			sb.WriteString(plainText(c, source))
 		}

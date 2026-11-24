@@ -83,6 +83,9 @@ func TestMarkdownImages(t *testing.T) {
 	if out := md1(t, "![**b**](x.png)"); !strings.Contains(out, `alt="b"`) || strings.Contains(out, "strong") || strings.Count(out, "b") != 1 {
 		t.Errorf("alt: %s", out)
 	}
+	if out := md1(t, "![see https://e.example and\nmore](x.png)"); !strings.Contains(out, `alt="see https://e.example and more"`) {
+		t.Errorf("alt text: %s", out)
+	}
 	if out := md1(t, "[x](mailto:a@b.example) [y](https://e) [z](#f)"); strings.Count(out, "<a href") != 3 {
 		t.Errorf("safe schemes: %s", out)
 	}
