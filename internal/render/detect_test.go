@@ -14,10 +14,12 @@ func TestDetect(t *testing.T) {
 			"text/plain", "text/csv", "text/x-go", "text/javascript", "application/javascript",
 			"application/xml", "application/atom+xml", "application/xhtml+xml",
 			"application/yaml", "application/x-yaml", "application/toml", "application/x-sh",
-			"application/x-ndjson",
+			"application/x-ndjson", "application/x-python", "application/typescript", "application/x-php",
+			"application/x-perl", "application/x-ruby",
 		},
 		KindBinary: {
 			"image/svg+xml", "image/png", "application/octet-stream", "application/pdf",
+			"application/x-python-code",
 			"", "garbage", "/",
 		},
 	}

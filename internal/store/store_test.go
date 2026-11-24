@@ -449,3 +449,42 @@ func TestOpenRemovesStaleUploads(t *testing.T) {
 		t.Errorf("existing artifact lost: %v", err)
 	}
 }
+
+// lockBlobsDir makes blobs/ read-only so that renaming into it and removing from it fail.
+func lockBlobsDir(t *testing.T, dir string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("permissions do not bind root")
+	}
+	blobs := filepath.Join(dir, "blobs")
+	if err := os.Chmod(blobs, 0o500); err != nil { //nolint:gosec // directory mode
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(blobs, 0o700) }) //nolint:gosec // directory mode
+}
+
+func TestDeleteRemovesRowBeforeBlob(t *testing.T) {
+	s, dir := openStore(t)
+	a := create(t, s, "t", "content")
+	lockBlobsDir(t, dir)
+	if err := s.Delete(ctx, a.ID); err == nil {
+		t.Fatal("expected blob removal to fail")
+	}
+	if _, err := s.Get(ctx, a.ID); !errors.Is(err, artifact.ErrNotFound) {
+		t.Fatalf("row survived a failed blob removal: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "blobs", a.ID)); err != nil {
+		t.Fatalf("blob should remain: %v", err)
+	}
+}
+
+func TestCreateInsertsRowOnlyAfterRename(t *testing.T) {
+	s, dir := openStore(t)
+	lockBlobsDir(t, dir)
+	if _, err := s.Create(ctx, "t", "text/plain", strings.NewReader("data")); err == nil {
+		t.Fatal("expected rename to fail")
+	}
+	if l, err := s.List(ctx); err != nil || len(l) != 0 {
+		t.Fatalf("List = %v, %v; a row exists although the blob was never renamed into place", l, err)
+	}
+}
