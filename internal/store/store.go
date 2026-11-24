@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
@@ -45,8 +46,8 @@ var _ artifact.Store = (*Store)(nil)
 
 // Open creates dataDir and dataDir/blobs with mode 0o700 if missing. It opens
 // <dataDir>/artitrove.db (modernc.org/sqlite), creating the file 0o600 first if absent, and
-// creates the artifacts table if absent. It first deletes leftover temp upload files. Blob and temp files are 0o600. It returns any
-// filesystem or SQL error.
+// creates the artifacts table if absent. It first deletes temp upload files left by an earlier
+// process. Blob and temp files are 0o600. It returns any filesystem or SQL error.
 func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(dataDir, "blobs"), 0o700); err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func Open(dataDir string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := removeStaleUploads(dataDir); err != nil {
+	if err := removeStaleUploads(root); err != nil {
 		return nil, errors.Join(err, root.Close())
 	}
 	// SQLite gives the -wal and -shm files the mode of the db file.
@@ -78,14 +79,16 @@ func Open(dataDir string) (*Store, error) {
 
 // removeStaleUploads deletes temp files that a crash or a shutdown timeout left in the data
 // directory. Nothing else writes there before Open returns.
-func removeStaleUploads(dataDir string) error {
-	stale, err := filepath.Glob(filepath.Join(dataDir, uploadPrefix+"*"))
+func removeStaleUploads(root *os.Root) error {
+	entries, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return err
 	}
-	for _, name := range stale {
-		if err := os.Remove(name); err != nil {
-			return err
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), uploadPrefix) {
+			if err := root.Remove(e.Name()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

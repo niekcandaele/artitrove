@@ -424,7 +424,11 @@ func TestCreateInsertFailureRemovesBlob(t *testing.T) {
 }
 
 func TestOpenRemovesStaleUploads(t *testing.T) {
-	s, dir := openStore(t)
+	dir := filepath.Join(t.TempDir(), "data[1]") // glob metacharacters must not matter
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stale := filepath.Join(dir, uploadPrefix+"abc")
 	if err := os.WriteFile(stale, []byte("partial"), 0o600); err != nil {
 		t.Fatal(err)
