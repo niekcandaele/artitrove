@@ -20,16 +20,27 @@ import (
 // The extensions are listed one by one: extension.GFM would register a second table renderer
 // that emits style= attributes. Attribute syntax and auto heading IDs stay off, so
 // "{onclick=...}" remains text and headings get no id (no DOM clobbering).
-var md = goldmark.New(
-	goldmark.WithExtensions(
-		extension.NewTable(extension.WithTableCellAlignMethod(extension.TableCellAlignAttribute)),
-		extension.Strikethrough,
-		extension.Linkify,
-		extension.TaskList,
-	),
-	goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(linkSafety{}, 100))),
-	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(nodeRenderer{}, 100))),
+var (
+	mdHighlighted = newMarkdown(true)
+	mdPlain       = newMarkdown(false)
 )
+
+// maxHighlightSize bounds the Markdown source that gets syntax highlighting: chroma output is
+// about 15 times its input and takes about 2 µs per byte, and every page view renders anew.
+const maxHighlightSize = 512 << 10
+
+func newMarkdown(highlight bool) goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithExtensions(
+			extension.NewTable(extension.WithTableCellAlignMethod(extension.TableCellAlignAttribute)),
+			extension.Strikethrough,
+			extension.Linkify,
+			extension.TaskList,
+		),
+		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(linkSafety{}, 100))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(nodeRenderer{highlight}, 100))),
+	)
+}
 
 // Markdown renders CommonMark + GFM to an HTML fragment that is safe to embed in an app page:
 //   - Raw HTML is dropped (no html.WithUnsafe).
@@ -39,7 +50,7 @@ var md = goldmark.New(
 //   - Fenced code is highlighted with chroma using CSS classes only: html.WithClasses(true),
 //     HighlightClassPrefix, and a <pre class="hl-chroma"> wrapper. An unknown or absent
 //     language gives an escaped plain <pre><code>. If highlighting fails, the block falls
-//     back to the escaped plain <pre><code>.
+//     back to the escaped plain <pre><code>. Sources over 512 KiB are not highlighted at all.
 //   - An <img> is emitted only when the destination is a same-origin relative URL (no scheme
 //     and not starting with "//"). Any other image is rendered as <a href="dest">alt text</a>
 //     (or dest when alt is empty), because the page CSP blocks external and data: images.
@@ -49,6 +60,10 @@ var md = goldmark.New(
 // The output contains no style attributes and no script. Errors: only those from goldmark's Convert.
 func Markdown(src []byte) (template.HTML, error) {
 	src = bytes.ToValidUTF8(src, []byte("�"))
+	md := mdHighlighted
+	if len(src) > maxHighlightSize {
+		md = mdPlain
+	}
 	var buf bytes.Buffer
 	if err := md.Convert(src, &buf); err != nil {
 		return "", err
@@ -135,11 +150,11 @@ func (linkSafety) Transform(doc *ast.Document, reader text.Reader, _ parser.Cont
 }
 
 // nodeRenderer overrides the default image and fenced code renderers.
-type nodeRenderer struct{}
+type nodeRenderer struct{ highlight bool }
 
-func (nodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+func (r nodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindImage, renderImage)
-	reg.Register(ast.KindFencedCodeBlock, renderFenced)
+	reg.Register(ast.KindFencedCodeBlock, r.renderFenced)
 }
 
 func plainText(n ast.Node, source []byte) string {
@@ -196,7 +211,7 @@ func renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) 
 	return ast.WalkSkipChildren, nil
 }
 
-func renderFenced(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+func (r nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
 	}
@@ -206,9 +221,11 @@ func renderFenced(w util.BufWriter, source []byte, node ast.Node, entering bool)
 		seg := n.Lines().At(i)
 		code.Write(seg.Value(source))
 	}
-	if highlighted, ok := highlight(string(n.Language(source)), code.String()); ok {
-		_, _ = w.WriteString(highlighted)
-		return ast.WalkSkipChildren, nil
+	if r.highlight {
+		if highlighted, ok := highlight(string(n.Language(source)), code.String()); ok {
+			_, _ = w.WriteString(highlighted)
+			return ast.WalkSkipChildren, nil
+		}
 	}
 	_, _ = w.WriteString("<pre><code>")
 	_, _ = w.Write(util.EscapeHTML(code.Bytes()))

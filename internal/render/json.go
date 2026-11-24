@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const maxJSONTreeSize = 512 << 10
+
 type jsonNode struct {
 	kind     string // object, array, str, num, lit
 	text     string // escaped scalar text
@@ -24,10 +26,11 @@ type jsonNode struct {
 // when json.Valid(src) is false, which also bounds the nesting depth.
 //
 // Strings and keys are shown in re-encoded JSON form, so quotes, newlines and control
-// characters are visible; bidi override characters stay raw. There is no size or depth limit
-// beyond json.Valid; very deep trees may be flattened by the browser.
+// characters are visible; bidi override characters stay raw. Nesting depth is bounded by
+// json.Valid (10000 levels). Sources over 512 KiB also return ("", false), so the caller shows
+// them as text: the tree's HTML is about 20 times the source size.
 func JSON(src []byte) (html template.HTML, ok bool) {
-	if !json.Valid(src) {
+	if len(src) > maxJSONTreeSize || !json.Valid(src) {
 		return "", false
 	}
 	dec := json.NewDecoder(bytes.NewReader(src))

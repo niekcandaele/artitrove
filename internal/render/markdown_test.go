@@ -150,3 +150,12 @@ func TestMarkdownConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestMarkdownLargeNotHighlighted(t *testing.T) {
+	fence := "```go\nfunc main() {}\n```\n"
+	src := fence + strings.Repeat("x", maxHighlightSize)
+	out := md1(t, src)
+	if strings.Contains(out, "hl-chroma") || !strings.Contains(out, "<pre><code>func main() {}\n</code></pre>") {
+		t.Errorf("large source: %.200s", out)
+	}
+}

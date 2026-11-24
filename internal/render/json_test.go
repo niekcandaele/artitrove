@@ -81,3 +81,13 @@ func TestJSONStructure(t *testing.T) {
 		t.Error("singular item")
 	}
 }
+
+func TestJSONLargeFallsBack(t *testing.T) {
+	fits := "[" + strings.Repeat(" ", maxJSONTreeSize-2) + "]"
+	if _, ok := JSON([]byte(fits)); !ok {
+		t.Errorf("%d bytes rejected", len(fits))
+	}
+	if out, ok := JSON([]byte(fits + " ")); ok || out != "" {
+		t.Error("oversized document rendered as a tree")
+	}
+}
