@@ -182,10 +182,6 @@ func staticFiles() http.Handler {
 	files := http.StripPrefix(ui.StaticPath, http.FileServerFS(ui.Static()))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", staticCacheControl)
-		if strings.HasSuffix(r.URL.Path, "/") {
-			http.NotFound(w, r)
-			return
-		}
 		name := strings.TrimPrefix(r.URL.Path, ui.StaticPath)
 		if info, err := fs.Stat(ui.Static(), name); err != nil || info.IsDir() {
 			http.NotFound(w, r)
