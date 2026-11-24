@@ -46,6 +46,9 @@ func unsafeReason(s string) string {
 			if !allowedAttr[a[1]] {
 				return "attribute " + a[1]
 			}
+			if _, dup := attrs[a[1]]; dup {
+				return "duplicate attribute " + a[1] // browsers keep the first, so checking one value is not enough
+			}
 			attrs[a[1]] = a[2]
 		}
 		if _, disabled := attrs["disabled"]; m[2] == "input" && (attrs["type"] != "checkbox" || !disabled) {
@@ -115,7 +118,7 @@ func TestAssertSafeSelf(t *testing.T) {
 		`<img/src/onerror=x>`, `<a href=javascript:x>`, `<a href="javascript:x">`, `<script`,
 		`<p style="x">`, `<div onclick="x">`, `<a href="&#106;avascript:x">`, "a\xff",
 		`<a href="ms-msdt:x">`, `<img src="https://evil/x">`, `<img src="//evil/x">`, `<img src="&#92;&#92;evil/x">`,
-		`<input type="checkbox">`, `<input>`,
+		`<input type="checkbox">`, `<input>`, `<a href="javascript:x" href="/">`,
 	} {
 		if unsafeReason(bad) == "" {
 			t.Errorf("accepted %q", bad)
@@ -200,7 +203,7 @@ func FuzzJSON(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, src []byte) {
 		out, ok := JSON(src)
-		if ok != json.Valid(src) {
+		if ok != (json.Valid(src) && len(src) <= maxJSONTreeSize) {
 			t.Fatalf("ok=%v", ok)
 		}
 		assertSafe(t, string(out))
