@@ -122,6 +122,8 @@ func TestLoadErrors(t *testing.T) {
 		{name: "fragment", key: url, val: "https://x.example#f"},
 		{name: "bare fragment", key: url, val: "https://x.example#"},
 		{name: "userinfo", key: url, val: "https://user:" + "secret@x.example", mustNotContain: "secret"},
+		{name: "username only", key: url, val: "https://secret-user@x.example", mustNotContain: "secret"},
+		{name: "userinfo parse error", key: url, val: "https://user:secret@x.example:abc", mustNotContain: "secret"},
 		{name: "ftp", key: url, val: "ftp://x.example"},
 		{name: "ftp path", key: url, val: "ftp://x.example/p"},
 		{name: "no scheme", key: url, val: "localhost:8080"},

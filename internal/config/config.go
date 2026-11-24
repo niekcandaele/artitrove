@@ -76,24 +76,24 @@ func Load(getenv func(string) string) (Config, error) {
 	return c, errors.Join(errs...)
 }
 
-// checkBaseURL returns at most one error. Secrets in userinfo are never echoed.
+// checkBaseURL returns at most one error. The value is never echoed, since it may carry credentials.
 func checkBaseURL(v string) error {
 	u, err := url.Parse(v)
 	if err != nil {
-		return fmt.Errorf("ARTITROVE_BASE_URL: %w", err)
+		return errors.New("ARTITROVE_BASE_URL is not a valid URL")
 	}
 	if (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return fmt.Errorf("ARTITROVE_BASE_URL %s must be an absolute http or https URL with a host", u.Redacted())
+		return errors.New("ARTITROVE_BASE_URL must be an absolute http or https URL with a host")
 	}
 	if (&url.URL{Scheme: u.Scheme, Host: u.Host}).String() != v {
-		return fmt.Errorf("ARTITROVE_BASE_URL %s must be scheme and host only, like https://trove.example (no path, trailing slash, query, fragment or userinfo)", u.Redacted())
+		return errors.New("ARTITROVE_BASE_URL must be only a lowercase scheme and a host, like https://trove.example (no path, trailing slash, query, fragment or userinfo)")
 	}
 	if strings.HasSuffix(u.Host, ":") {
-		return fmt.Errorf("ARTITROVE_BASE_URL %s has an invalid port", u.Redacted())
+		return errors.New("ARTITROVE_BASE_URL has an invalid port")
 	}
 	if p := u.Port(); p != "" {
 		if n, err := strconv.ParseUint(p, 10, 16); err != nil || n == 0 {
-			return fmt.Errorf("ARTITROVE_BASE_URL %s has an invalid port", u.Redacted())
+			return errors.New("ARTITROVE_BASE_URL has an invalid port")
 		}
 	}
 	return nil
