@@ -10,10 +10,7 @@ import (
 	"testing"
 )
 
-const (
-	firefoxAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-	unknownID     = "AAAAAAAAAAAAAAAAAAAAAA"
-)
+const firefoxAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
 
 func htmlView(t *testing.T, s *server, id string, accept ...string) string {
 	t.Helper()

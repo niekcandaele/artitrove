@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -31,6 +30,7 @@ const (
 	testToken = "e2e-test-token-0123456789abcdef" //nolint:gosec // not a credential
 	baseURL   = "http://trove.test:8443"
 	pageCSP   = "default-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'"
+	unknownID = "AAAAAAAAAAAAAAAAAAAAAA"
 )
 
 var binPath string
@@ -519,7 +519,6 @@ func dataDirEntries(t *testing.T, dir string) []string {
 	for _, e := range blobs {
 		names = append(names, e.Name())
 	}
-	sort.Strings(names)
 	return names
 }
 

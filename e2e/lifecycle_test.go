@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -60,7 +61,7 @@ func TestRestartPersistence(t *testing.T) {
 	}
 	resp, b := s2.get(t, "/api/artifacts/"+ids[3])
 	assertJSONError(t, resp, b, http.StatusNotFound)
-	if got := indexIDs(t, s2); strings.Join(got, ",") != strings.Join(order, ",") {
+	if got := indexIDs(t, s2); !slices.Equal(got, order) {
 		t.Errorf("index order changed: %v -> %v", order, got)
 	}
 	s2.upload(t, []byte("after restart"), "text/plain", "")

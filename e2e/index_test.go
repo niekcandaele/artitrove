@@ -3,6 +3,7 @@ package e2e
 import (
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -81,7 +82,7 @@ func TestIndexListing(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond)
 	c := s.upload(t, []byte("{}"), "application/json", "")
 	want := []string{c.ID, b.ID, a.ID}
-	if got := indexIDs(t, s); strings.Join(got, ",") != strings.Join(want, ",") {
+	if got := indexIDs(t, s); !slices.Equal(got, want) {
 		t.Errorf("order = %v, want newest first %v", got, want)
 	}
 
@@ -96,7 +97,7 @@ func TestIndexListing(t *testing.T) {
 		t.Fatalf("delete status %d", resp.StatusCode)
 	}
 	want = []string{c.ID, a.ID}
-	if got := indexIDs(t, s); strings.Join(got, ",") != strings.Join(want, ",") {
+	if got := indexIDs(t, s); !slices.Equal(got, want) {
 		t.Errorf("after delete = %v, want %v", got, want)
 	}
 }

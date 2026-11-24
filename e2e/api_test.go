@@ -5,9 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -35,12 +36,7 @@ func TestUploadResponseShape(t *testing.T) {
 
 	var raw map[string]any
 	decode(t, b, &raw)
-	keys := make([]string, 0, len(raw))
-	for k := range raw {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	eq(t, "keys", strings.Join(keys, ","), "content_type,created_at,id,raw_url,sha256,size,title,url")
+	eq(t, "keys", strings.Join(slices.Sorted(maps.Keys(raw)), ","), "content_type,created_at,id,raw_url,sha256,size,title,url")
 
 	var a artifactJSON
 	decode(t, b, &a)
@@ -324,7 +320,7 @@ func TestDelete(t *testing.T) {
 		t.Errorf("blobs = %v, want only %s", got, keep.ID)
 	}
 
-	resp, b = s.delete(t, "AAAAAAAAAAAAAAAAAAAAAA")
+	resp, b = s.delete(t, unknownID)
 	assertJSONError(t, resp, b, http.StatusNotFound)
 	resp, b = s.delete(t, "not-an-id")
 	assertJSONError(t, resp, b, http.StatusNotFound)
@@ -337,7 +333,7 @@ func TestUnknownAndHostileIDs(t *testing.T) {
 	s := newServer(t)
 	known := s.upload(t, []byte("still here"), "text/plain", "")
 	ids := []string{
-		"AAAAAAAAAAAAAAAAAAAAAA",
+		unknownID,
 		strings.Repeat("A", 21),
 		strings.Repeat("A", 23),
 		"AAAAAAAAAAA.AAAAAAAAAA",
@@ -389,7 +385,6 @@ func TestCommonHeadersEverywhere(t *testing.T) {
 	a := s.upload(t, []byte("<p>x</p>"), "text/html", "t")
 	gone := s.upload(t, []byte("gone"), "text/plain", "")
 	idx := basic("", testToken)
-	unknown := "AAAAAAAAAAAAAAAAAAAAAA"
 	hdrPost := append(bearer(), "Content-Type", "text/plain")
 
 	requests := []struct {
@@ -411,11 +406,11 @@ func TestCommonHeadersEverywhere(t *testing.T) {
 		{"upload 401", "POST", "/api/artifacts", "x", nil, 401},
 		{"upload 413", "POST", "/api/artifacts", strings.Repeat("a", 1025), hdrPost, 413},
 		{"metadata 200", "GET", "/api/artifacts/" + a.ID, "", nil, 200},
-		{"metadata 404", "GET", "/api/artifacts/" + unknown, "", nil, 404},
+		{"metadata 404", "GET", "/api/artifacts/" + unknownID, "", nil, 404},
 		{"raw 200", "GET", "/a/" + a.ID + "/raw", "", nil, 200},
-		{"raw 404", "GET", "/a/" + unknown + "/raw", "", nil, 404},
+		{"raw 404", "GET", "/a/" + unknownID + "/raw", "", nil, 404},
 		{"view 200", "GET", "/a/" + a.ID, "", []string{"Accept", "text/html"}, 200},
-		{"view 404", "GET", "/a/" + unknown, "", []string{"Accept", "text/html"}, 404},
+		{"view 404", "GET", "/a/" + unknownID, "", []string{"Accept", "text/html"}, 404},
 		{"view as raw", "GET", "/a/" + a.ID, "", nil, 200},
 		{"delete 204", "DELETE", "/api/artifacts/" + gone.ID, "", bearer(), 204},
 		{"mux 404", "GET", "/nope", "", nil, 404},
