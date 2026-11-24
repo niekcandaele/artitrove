@@ -2,10 +2,11 @@
   "use strict";
   var canCopy = navigator.clipboard && window.isSecureContext;
 
-  function flash(el, text) {
+  function flash(btn, el, text) {
     var old = el.textContent;
     el.textContent = text;
-    setTimeout(function () { el.textContent = old; }, 1400);
+    btn.classList.add("flash");
+    setTimeout(function () { el.textContent = old; btn.classList.remove("flash"); }, 1400);
   }
 
   var share = document.querySelector("details.share");
@@ -19,7 +20,7 @@
       }
       e.preventDefault();
       navigator.clipboard.writeText(summary.dataset.url).then(function () {
-        flash(summary.querySelector(".txt"), "Copied");
+        flash(summary, summary.querySelector(".txt"), "Copied");
       }, function () {
         share.open = true;
         input.focus();
@@ -42,7 +43,7 @@
       };
       if (!canCopy) { select(); return; }
       navigator.clipboard.writeText(curl.textContent).then(function () {
-        flash(copyCurl, "Copied");
+        flash(copyCurl, copyCurl, "Copied");
       }, select);
     });
   }

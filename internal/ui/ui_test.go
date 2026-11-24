@@ -194,9 +194,15 @@ func TestStaticAssets(t *testing.T) {
 
 func TestStaticReferencesResolve(t *testing.T) {
 	ref := regexp.MustCompile(`/static/([\w./-]+)`)
-	files, _ := fs.Glob(templateFS, "templates/*.html")
+	files, err := fs.Glob(templateFS, "templates/*.html")
+	if err != nil || len(files) == 0 {
+		t.Fatal(err, files)
+	}
 	for _, f := range files {
-		b, _ := fs.ReadFile(templateFS, f)
+		b, err := fs.ReadFile(templateFS, f)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, m := range ref.FindAllStringSubmatch(string(b), -1) {
 			if m[1] == "highlight.css" {
 				continue

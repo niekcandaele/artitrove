@@ -26,7 +26,7 @@
 {{else if eq .Kind "json"}}<div class="json-view">{{.Body}}</div>
 {{else if eq .Kind "text"}}<pre class="text">
 {{.Text}}</pre>
-{{else}}<div class="reading file"><p class="meta"><bdi>{{.ContentType}}</bdi> · {{size .Size}}</p><p>This file type has no preview.</p><a class="btn primary" href="/a/{{.ID}}/raw" download="{{or .Title .ID}}">Download</a></div>
+{{else}}<div class="reading file"><p class="meta"><bdi>{{.ContentType}}</bdi><span>{{size .Size}}</span></p><p>This file type has no preview.</p><a class="btn primary" href="/a/{{.ID}}/raw" download="{{or .Title .ID}}">Download</a></div>
 {{end}}{{if ne .Kind "html"}}<p class="foot">Agents: fetch <code>/a/{{.ID}}/raw</code> for the original file.</p>
 {{end}}</body>
 </html>
