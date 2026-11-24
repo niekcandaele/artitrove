@@ -1,0 +1,397 @@
+<title>Artitrove UI Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a slim "specimen label" header (title + mono metadata) over the content; the chrome stays quiet so the artifact is the page. */
+:root {
+  --bg: oklch(0.972 0.005 150);
+  --surface: oklch(0.995 0.002 150);
+  --ink: oklch(0.23 0.015 160);
+  --muted: oklch(0.48 0.015 160);
+  --line: oklch(0.89 0.009 155);
+  --accent: oklch(0.5 0.1 80);
+  --accent-soft: oklch(0.93 0.045 88);
+  --code-bg: oklch(0.945 0.007 150);
+  --t-html: oklch(0.52 0.15 40);
+  --t-md: oklch(0.47 0.1 160);
+  --t-json: oklch(0.5 0.1 80);
+  --t-text: oklch(0.48 0.015 160);
+  --proto: oklch(0.3 0.02 160);
+  --proto-ink: oklch(0.95 0.01 150);
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.17 0.012 160); --surface: oklch(0.205 0.012 160); --ink: oklch(0.93 0.008 150);
+    --muted: oklch(0.69 0.012 155); --line: oklch(0.3 0.012 160); --accent: oklch(0.8 0.12 85);
+    --accent-soft: oklch(0.32 0.05 85); --code-bg: oklch(0.235 0.012 160);
+    --t-html: oklch(0.76 0.13 45); --t-md: oklch(0.78 0.11 160); --t-json: oklch(0.8 0.12 85); --t-text: oklch(0.69 0.012 155);
+    --proto: oklch(0.12 0.01 160); --proto-ink: oklch(0.9 0.01 150);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: oklch(0.17 0.012 160); --surface: oklch(0.205 0.012 160); --ink: oklch(0.93 0.008 150);
+  --muted: oklch(0.69 0.012 155); --line: oklch(0.3 0.012 160); --accent: oklch(0.8 0.12 85);
+  --accent-soft: oklch(0.32 0.05 85); --code-bg: oklch(0.235 0.012 160);
+  --t-html: oklch(0.76 0.13 45); --t-md: oklch(0.78 0.11 160); --t-json: oklch(0.8 0.12 85); --t-text: oklch(0.69 0.012 155);
+  --proto: oklch(0.12 0.01 160); --proto-ink: oklch(0.9 0.01 150);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--proto); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Prototype controls: not part of the product */
+.proto { color: var(--proto-ink); padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.proto-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.7; }
+.proto-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.proto button { background: transparent; color: var(--proto-ink); border: 1px solid color-mix(in oklch, var(--proto-ink) 30%, transparent); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+.proto button[aria-pressed="true"] { background: var(--proto-ink); color: var(--proto); border-color: var(--proto-ink); }
+.proto .spacer { flex: 1; }
+.stage-wrap { padding-bottom: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.stage { container-type: inline-size; background: var(--bg); border-radius: 10px; overflow: hidden; margin-inline: auto; max-width: 100%; min-height: 560px; transition: max-width 0.25s ease; }
+.stage.phone { max-width: 390px; }
+@media (prefers-reduced-motion: reduce) { .stage { transition: none; } }
+
+/* ---------- Product ---------- */
+.label { background: var(--surface); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 12px 20px; align-items: center; }
+.mark { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--ink); text-decoration: none; flex: none; }
+.mark svg { width: 20px; height: 20px; }
+.label-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); padding-left: 20px; }
+.label h1 { font-size: 16px; font-weight: 600; margin: 0; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; font-variant-numeric: tabular-nums; }
+.type { font-weight: 500; }
+.type.html { color: var(--t-html); } .type.md { color: var(--t-md); } .type.json { color: var(--t-json); } .type.text { color: var(--t-text); }
+.actions { display: flex; gap: 8px; flex: none; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn svg { width: 15px; height: 15px; flex: none; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+@container (max-width: 600px) {
+  .label { flex-wrap: wrap; padding: 10px 16px; }
+  .label-main { order: 3; flex-basis: 100%; border-left: 0; padding-left: 0; }
+  .actions { margin-left: auto; }
+  .btn .txt { display: none; }
+  .btn { padding: 7px 9px; }
+}
+
+.reading { max-width: 70ch; margin: 0 auto; padding: 32px 20px 56px; }
+.reading h2 { font-size: 26px; line-height: 1.2; margin: 0 0 12px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+.reading h3 { font-size: 18px; margin: 32px 0 8px; font-weight: 600; }
+.reading p, .reading ul { margin: 0 0 14px; }
+.reading ul { padding-left: 22px; }
+.reading a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.reading code { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { font-family: var(--mono); font-size: 13px; line-height: 1.6; background: var(--code-bg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.k { color: var(--t-html); } .s { color: var(--t-md); } .c { color: var(--muted); font-style: italic; }
+.tbl { overflow-x: auto; margin: 0 0 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: 13px; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.frame-note { font-family: var(--mono); font-size: 11.5px; color: var(--muted); padding: 6px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+.frame-note i { width: 7px; height: 7px; border-radius: 50%; background: var(--t-md); flex: none; }
+/* Stand-in for the sandboxed iframe: a foreign page with its own fixed colors */
+.frame { background: #ffffff; color: #1b2420; padding: 28px 24px 36px; min-height: 440px; font-family: Georgia, "Times New Roman", serif; }
+.frame h2 { margin: 0 0 4px; font-size: 24px; }
+.frame p { margin: 0 0 24px; color: #5b6660; font-size: 14px; }
+.bars { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-items: end; height: 220px; max-width: 560px; border-bottom: 1px solid #c9d1cc; }
+.bars div { background: #c2571a; border-radius: 3px 3px 0 0; position: relative; }
+.bars div span { position: absolute; top: -20px; left: 0; right: 0; text-align: center; font: 12px ui-monospace, Menlo, monospace; color: #1b2420; }
+.days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; max-width: 560px; font: 12px ui-monospace, Menlo, monospace; color: #5b6660; text-align: center; padding-top: 6px; }
+
+.json { font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 20px; overflow-x: auto; }
+.json details { padding-left: 18px; }
+.json > details { padding-left: 0; }
+.json summary { cursor: pointer; list-style-position: outside; margin-left: 18px; }
+.json > details > summary { margin-left: 18px; }
+.json .row { padding-left: 36px; white-space: nowrap; }
+.json .key { color: var(--t-html); } .json .str { color: var(--t-md); } .json .num { color: var(--t-json); } .json .dim { color: var(--muted); }
+
+.home { max-width: 760px; margin: 0 auto; padding: 40px 20px 56px; }
+.home-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.home-head svg { width: 34px; height: 34px; }
+.home-head b { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.home h2 { font-size: 30px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; max-width: 20ch; text-wrap: balance; }
+.home p.lead { color: var(--muted); font-size: 16px; max-width: 58ch; margin: 0 0 28px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.cmd { position: relative; }
+.cmd pre { padding-right: 84px; }
+.cmd .btn { position: absolute; top: 8px; right: 8px; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); margin-top: 28px; }
+.two > div { padding: 18px 20px 0 0; min-width: 0; }
+.two > div + div { padding-left: 20px; border-left: 1px solid var(--line); }
+.two h3 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+.two p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.two code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+@container (max-width: 600px) {
+  .home { padding-top: 28px; } .home h2 { font-size: 25px; }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .two > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); margin-top: 16px; }
+}
+
+.index { max-width: 860px; margin: 0 auto; padding: 28px 20px 56px; }
+.index-top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; margin-bottom: 14px; }
+.index-top h2 { font-size: 20px; margin: 0; font-weight: 600; }
+.index-top .meta { font-size: 12.5px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.search { flex: 1 1 220px; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 12px; font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: transparent; color: var(--ink); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list a { display: grid; grid-template-columns: minmax(0, 1fr) 150px 70px 90px; gap: 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+.list a:hover .t { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.list .t { font-weight: 500; overflow-wrap: anywhere; }
+.list .m { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.list .sz, .list .ago { text-align: right; }
+.empty { color: var(--muted); padding: 28px 0; }
+@container (max-width: 600px) {
+  .list a { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
+  .list .t { grid-column: 1 / -1; }
+  .list .sz { display: none; }
+}
+.foot { font-family: var(--mono); font-size: 11.5px; color: var(--muted); padding: 14px 20px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+</style>
+
+<div class="proto">
+  <span class="proto-label">Prototype · sample data</span>
+  <div class="proto-tabs" id="tabs">
+    <button type="button" data-s="markdown">Markdown artifact</button>
+    <button type="button" data-s="html">HTML artifact</button>
+    <button type="button" data-s="json">JSON artifact</button>
+    <button type="button" data-s="landing">Landing</button>
+    <button type="button" data-s="index">Index (opt-in)</button>
+  </div>
+  <span class="spacer"></span>
+  <button type="button" id="phone" aria-pressed="false">Phone width</button>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mark" viewBox="0 0 24 24"><path d="M4 9.5 12 4l8 5.5v9.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 13h16" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="10" y="11" width="4" height="4" rx="1" fill="var(--accent)" stroke="none"/></symbol>
+  <symbol id="i-raw" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+
+<div class="stage-wrap"><div class="stage" id="stage">
+
+  <!-- Markdown artifact -->
+  <section data-screen="markdown">
+    <header class="label">
+      <a class="mark" href="#landing"><svg><use href="#i-mark"/></svg></a>
+      <div class="label-main">
+        <h1>Queue worker migration plan</h1>
+        <div class="meta"><span class="type md">text/markdown</span><span>4.2 kB</span><span>24 Nov 2026, 14:02</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="#markdown" title="Open raw"><svg><use href="#i-raw"/></svg><span class="txt">Raw</span></a>
+        <button type="button" class="btn primary copy" data-copy="https://trove.example/a/Zk3vXq9mT2c8RwLp0aBn4g"><svg><use href="#i-link"/></svg><span class="txt">Copy link</span></button>
+      </div>
+    </header>
+    <article class="reading">
+      <h2>Queue worker migration plan</h2>
+      <p>The current workers poll Redis every 500 ms. Moving to blocking pops removes the idle load and cuts median pickup latency. This plan covers the rollout order and the rollback path.</p>
+      <h3>Rollout order</h3>
+      <ul>
+        <li>Ship the new consumer behind <code>WORKER_BLOCKING_POP</code>, off by default.</li>
+        <li>Enable it on the <code>email</code> queue first; it has the lowest volume.</li>
+        <li>Watch pickup latency for 24 hours, then enable the remaining queues.</li>
+      </ul>
+      <h3>Consumer loop</h3>
+<pre><code><span class="k">for</span> {
+    job, err := q.BlockingPop(ctx, <span class="s">"jobs:email"</span>, 5*time.Second)
+    <span class="k">if</span> errors.Is(err, queue.ErrTimeout) {
+        <span class="k">continue</span> <span class="c">// no work; loop again</span>
+    }
+    handle(ctx, job)
+}</code></pre>
+      <h3>Expected effect</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Queue</th><th>Pickup p50 today</th><th>Expected</th></tr></thead>
+        <tbody>
+          <tr><td>email</td><td class="n">250 ms</td><td class="n">4 ms</td></tr>
+          <tr><td>webhooks</td><td class="n">260 ms</td><td class="n">5 ms</td></tr>
+          <tr><td>reports</td><td class="n">245 ms</td><td class="n">4 ms</td></tr>
+        </tbody>
+      </table></div>
+      <p>Rollback is a flag flip. See the <a href="#markdown">runbook</a> for the alert thresholds.</p>
+    </article>
+    <div class="foot">Agents: fetch /a/Zk3vXq9mT2c8RwLp0aBn4g/raw for the original file.</div>
+  </section>
+
+  <!-- HTML artifact -->
+  <section data-screen="html" hidden>
+    <header class="label">
+      <a class="mark" href="#landing"><svg><use href="#i-mark"/></svg></a>
+      <div class="label-main">
+        <h1>Latency dashboard, week 47</h1>
+        <div class="meta"><span class="type html">text/html</span><span>38 kB</span><span>24 Nov 2026, 11:47</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="#html" title="Open raw"><svg><use href="#i-raw"/></svg><span class="txt">Open full page</span></a>
+        <button type="button" class="btn primary copy" data-copy="https://trove.example/a/Q7hN2xVdLm5sYcE1uRt8Jw"><svg><use href="#i-link"/></svg><span class="txt">Copy link</span></button>
+      </div>
+    </header>
+    <div class="frame-note"><i></i>Sandboxed frame. The artifact runs its own scripts but cannot reach Artitrove.</div>
+    <div class="frame">
+      <h2>API latency, week 47</h2>
+      <p>p95 in milliseconds, per day. This area is the agent's own page, shown as it was written.</p>
+      <div class="bars">
+        <div style="height:56%"><span>212</span></div><div style="height:52%"><span>198</span></div><div style="height:64%"><span>243</span></div><div style="height:92%"><span>351</span></div><div style="height:59%"><span>224</span></div><div style="height:44%"><span>168</span></div><div style="height:42%"><span>159</span></div>
+      </div>
+      <div class="days"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    </div>
+  </section>
+
+  <!-- JSON artifact -->
+  <section data-screen="json" hidden>
+    <header class="label">
+      <a class="mark" href="#landing"><svg><use href="#i-mark"/></svg></a>
+      <div class="label-main">
+        <h1>Load test results</h1>
+        <div class="meta"><span class="type json">application/json</span><span>11 kB</span><span>23 Nov 2026, 19:30</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="#json" title="Open raw"><svg><use href="#i-raw"/></svg><span class="txt">Raw</span></a>
+        <button type="button" class="btn primary copy" data-copy="https://trove.example/a/b4KpW9zTfX0aGv6LmQe3Hs"><svg><use href="#i-link"/></svg><span class="txt">Copy link</span></button>
+      </div>
+    </header>
+    <div class="json">
+      <details open><summary><span class="dim">{ 4 keys }</span></summary>
+        <div class="row"><span class="key">"target"</span>: <span class="str">"https://staging.example/api"</span></div>
+        <div class="row"><span class="key">"duration_s"</span>: <span class="num">300</span></div>
+        <details open><summary><span class="key">"summary"</span>: <span class="dim">{ 3 keys }</span></summary>
+          <div class="row"><span class="key">"requests"</span>: <span class="num">182440</span></div>
+          <div class="row"><span class="key">"error_rate"</span>: <span class="num">0.0031</span></div>
+          <div class="row"><span class="key">"p95_ms"</span>: <span class="num">224</span></div>
+        </details>
+        <details><summary><span class="key">"stages"</span>: <span class="dim">[ 3 items ]</span></summary>
+          <div class="row"><span class="dim">{ "vus": 50, "p95_ms": 141 }</span></div>
+          <div class="row"><span class="dim">{ "vus": 200, "p95_ms": 224 }</span></div>
+          <div class="row"><span class="dim">{ "vus": 400, "p95_ms": 508 }</span></div>
+        </details>
+      </details>
+    </div>
+  </section>
+
+  <!-- Landing -->
+  <section data-screen="landing" hidden>
+    <div class="home">
+      <div class="home-head"><svg><use href="#i-mark"/></svg><b>Artitrove</b></div>
+      <h2>One home for the files your agents make.</h2>
+      <p class="lead">Agents upload a file and get a link. Open the link on any device for a readable view, or fetch the raw file from another agent.</p>
+      <p class="eyebrow">Upload</p>
+      <div class="cmd">
+<pre id="curl"><code>curl -sS --data-binary @report.html \
+  -H <span class="s">"Authorization: Bearer $ARTITROVE_TOKEN"</span> \
+  -H <span class="s">"Content-Type: text/html"</span> \
+  <span class="s">"https://trove.example/api/artifacts?title=Latency+report"</span></code></pre>
+        <button type="button" class="btn copy" data-copy-from="curl"><span>Copy</span></button>
+      </div>
+      <div class="two">
+        <div><h3>For people</h3><p>Rendered Markdown, a JSON tree, and sandboxed HTML, sized for a phone.</p><code>/a/{id}</code></div>
+        <div><h3>For agents</h3><p>The exact bytes, with the original content type.</p><code>/a/{id}/raw</code></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Index -->
+  <section data-screen="index" hidden>
+    <header class="label">
+      <a class="mark" href="#landing"><svg><use href="#i-mark"/></svg>Artitrove</a>
+    </header>
+    <div class="index">
+      <div class="index-top"><h2>Artifacts</h2><span class="meta" id="count"></span></div>
+      <div class="filters">
+        <input class="search" id="q" type="search" placeholder="Filter by title" aria-label="Filter by title">
+        <div class="chips" id="chips">
+          <button type="button" class="chip" data-t="" aria-pressed="true">all</button>
+          <button type="button" class="chip" data-t="html" aria-pressed="false">html</button>
+          <button type="button" class="chip" data-t="md" aria-pressed="false">markdown</button>
+          <button type="button" class="chip" data-t="json" aria-pressed="false">json</button>
+          <button type="button" class="chip" data-t="text" aria-pressed="false">text</button>
+        </div>
+      </div>
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="empty" hidden>No artifacts match that filter.</p>
+    </div>
+  </section>
+
+</div></div>
+
+<script>
+(function () {
+  var SCREENS = ['markdown', 'html', 'json', 'landing', 'index'];
+  var tabs = document.querySelectorAll('#tabs button');
+  function show() {
+    var name = location.hash.slice(1);
+    if (SCREENS.indexOf(name) < 0) name = 'markdown';
+    document.querySelectorAll('[data-screen]').forEach(function (s) { s.hidden = s.dataset.screen !== name; });
+    tabs.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.s === name)); });
+  }
+  tabs.forEach(function (b) { b.addEventListener('click', function () { location.hash = b.dataset.s; show(); }); });
+  window.addEventListener('hashchange', show);
+  show();
+
+  var phone = document.getElementById('phone'), stage = document.getElementById('stage');
+  phone.addEventListener('click', function () {
+    var on = stage.classList.toggle('phone');
+    phone.setAttribute('aria-pressed', String(on));
+  });
+
+  document.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = b.dataset.copy || document.getElementById(b.dataset.copyFrom).textContent;
+      var label = b.querySelector('span'), old = label.textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        label.textContent = 'Copied';
+        setTimeout(function () { label.textContent = old; }, 1400);
+      }, function () {
+        label.textContent = 'Copy failed';
+        setTimeout(function () { label.textContent = old; }, 1400);
+      });
+    });
+  });
+
+  var ITEMS = [
+    { t: 'Queue worker migration plan', k: 'md', ct: 'text/markdown', kb: 4.2, ago: '12 min ago', to: 'markdown' },
+    { t: 'Latency dashboard, week 47', k: 'html', ct: 'text/html', kb: 38, ago: '2 h ago', to: 'html' },
+    { t: 'Load test results', k: 'json', ct: 'application/json', kb: 11, ago: 'yesterday', to: 'json' },
+    { t: 'Onboarding flow mockup', k: 'html', ct: 'text/html', kb: 64, ago: '2 days ago', to: 'html' },
+    { t: 'Release notes draft v0.9', k: 'md', ct: 'text/markdown', kb: 2.9, ago: '3 days ago', to: 'markdown' },
+    { t: 'nginx.conf review', k: 'text', ct: 'text/plain', kb: 1.1, ago: '5 days ago', to: 'markdown' },
+    { t: 'Schema diff, staging vs prod', k: 'json', ct: 'application/json', kb: 7.4, ago: 'last week', to: 'json' }
+  ];
+  var list = document.getElementById('list'), q = document.getElementById('q'), type = '';
+  function render() {
+    var needle = q.value.trim().toLowerCase();
+    var rows = ITEMS.filter(function (i) { return (!type || i.k === type) && i.t.toLowerCase().indexOf(needle) >= 0; });
+    list.textContent = '';
+    rows.forEach(function (i) {
+      var li = document.createElement('li'), a = document.createElement('a');
+      a.href = '#' + i.to;
+      [['t', i.t], ['m type ' + i.k, i.ct], ['m sz', i.kb + ' kB'], ['m ago', i.ago]].forEach(function (c) {
+        var s = document.createElement('span'); s.className = c[0]; s.textContent = c[1]; a.appendChild(s);
+      });
+      li.appendChild(a); list.appendChild(li);
+    });
+    var total = rows.reduce(function (n, i) { return n + i.kb; }, 0);
+    document.getElementById('count').textContent = rows.length + ' artifacts · ' + total.toFixed(1) + ' kB';
+    document.getElementById('empty').hidden = rows.length > 0;
+  }
+  q.addEventListener('input', render);
+  document.querySelectorAll('#chips .chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      type = c.dataset.t;
+      document.querySelectorAll('#chips .chip').forEach(function (o) { o.setAttribute('aria-pressed', String(o === c)); });
+      render();
+    });
+  });
+  render();
+})();
+</script>
