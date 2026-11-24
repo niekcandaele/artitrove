@@ -1,6 +1,15 @@
 // Package config loads the service configuration from environment variables.
 package config
 
+import (
+	"errors"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
 // Config is the validated service configuration.
 type Config struct {
 	Token   string // ARTITROVE_TOKEN, required, at least 16 runes
@@ -21,7 +30,73 @@ type Config struct {
 //   - MaxSize not a positive base-10 integer
 //   - Index not a strconv.ParseBool value
 func Load(getenv func(string) string) (Config, error) {
-	panic("not implemented")
+	get := func(k, def string) string {
+		if v := getenv(k); v != "" {
+			return v
+		}
+		return def
+	}
+	c := Config{
+		Token:   getenv("ARTITROVE_TOKEN"),
+		BaseURL: get("ARTITROVE_BASE_URL", "http://localhost:8080"),
+		Listen:  get("ARTITROVE_LISTEN", ":8080"),
+		DataDir: get("ARTITROVE_DATA_DIR", "./data"),
+		MaxSize: 10485760,
+	}
+	var errs []error
+
+	if c.Token == "" {
+		errs = append(errs, errors.New("ARTITROVE_TOKEN is required"))
+	} else if n := utf8.RuneCountInString(c.Token); n < 16 {
+		errs = append(errs, fmt.Errorf("ARTITROVE_TOKEN must be at least 16 characters, got %d", n))
+	}
+
+	if err := checkBaseURL(c.BaseURL); err != nil {
+		errs = append(errs, err)
+	}
+
+	if v := getenv("ARTITROVE_MAX_SIZE"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n <= 0 {
+			errs = append(errs, fmt.Errorf("ARTITROVE_MAX_SIZE %q must be a positive integer number of bytes", v))
+		} else {
+			c.MaxSize = n
+		}
+	}
+
+	if v := getenv("ARTITROVE_INDEX"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("ARTITROVE_INDEX %q must be true or false", v))
+		} else {
+			c.Index = b
+		}
+	}
+
+	return c, errors.Join(errs...)
+}
+
+// checkBaseURL returns at most one error. The value is never echoed, since it may carry credentials.
+func checkBaseURL(v string) error {
+	u, err := url.Parse(v)
+	if err != nil {
+		return errors.New("ARTITROVE_BASE_URL is not a valid URL")
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return errors.New("ARTITROVE_BASE_URL must be an absolute http or https URL with a host")
+	}
+	if (&url.URL{Scheme: u.Scheme, Host: u.Host}).String() != v {
+		return errors.New("ARTITROVE_BASE_URL must be only a lowercase scheme and a host, like https://trove.example (no path, trailing slash, query, fragment or userinfo)")
+	}
+	if strings.HasSuffix(u.Host, ":") {
+		return errors.New("ARTITROVE_BASE_URL has an invalid port")
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.ParseUint(p, 10, 16); err != nil || n == 0 {
+			return errors.New("ARTITROVE_BASE_URL has an invalid port")
+		}
+	}
+	return nil
 }
 
 // ArtifactURL returns the share link for id: BaseURL + "/a/" + id.
