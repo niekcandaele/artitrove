@@ -424,3 +424,28 @@ func TestCommonHeadersEverywhere(t *testing.T) {
 		})
 	}
 }
+
+func TestUnroutedRequestsAnswerInJSON(t *testing.T) {
+	t.Parallel()
+	s := newServer(t)
+	a := s.upload(t, []byte("x"), "text/plain", "")
+	cases := []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodPost, "/a/" + a.ID + "/raw", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/healthz", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/a/" + a.ID + "/", http.StatusNotFound},
+		{http.MethodGet, "/a/" + a.ID + "/raw/x", http.StatusNotFound},
+		{http.MethodGet, "/nope", http.StatusNotFound},
+		{http.MethodGet, "/static/", http.StatusNotFound},
+		{http.MethodGet, "/static/nope", http.StatusNotFound},
+	}
+	for _, c := range cases {
+		resp, b := s.do(t, c.method, c.path, nil)
+		assertJSONError(t, resp, b, c.status)
+		if c.status == http.StatusMethodNotAllowed && resp.Header.Get("Allow") == "" {
+			t.Errorf("%s %s: no Allow header", c.method, c.path)
+		}
+	}
+}

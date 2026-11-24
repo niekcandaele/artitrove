@@ -3,9 +3,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -77,8 +79,47 @@ func newHandler(cfg config.Config, st artifact.Store) http.Handler {
 	mux := http.NewServeMux()
 	api.Register(mux, cfg, st)
 	web.Register(mux, cfg, st, api.RawHandler(st))
-	return securityHeaders(mux)
+	return securityHeaders(jsonRouteErrors(mux))
 }
+
+// jsonRouteErrors turns the mux's own plain-text 404 and 405 answers (no pattern matched) into the
+// JSON errors the spec promises.
+func jsonRouteErrors(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h, pattern := mux.Handler(r)
+		if pattern != "" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		rec := &discardWriter{header: http.Header{}}
+		h.ServeHTTP(rec, r)
+		if rec.status != http.StatusNotFound && rec.status != http.StatusMethodNotAllowed {
+			maps.Copy(w.Header(), rec.header)
+			w.WriteHeader(rec.status)
+			return
+		}
+		msg := "not found"
+		if rec.status == http.StatusMethodNotAllowed {
+			w.Header().Set("Allow", rec.header.Get("Allow"))
+			msg = "method " + r.Method + " not allowed"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(rec.status)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+			slog.Error("write response", "error", err)
+		}
+	})
+}
+
+// discardWriter records a response's status and headers and drops its body.
+type discardWriter struct {
+	header http.Header
+	status int
+}
+
+func (d *discardWriter) Header() http.Header         { return d.header }
+func (d *discardWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (d *discardWriter) WriteHeader(status int)      { d.status = status }
 
 // serve serves h on ln until ctx is cancelled, then shuts down gracefully. It returns only
 // after in-flight handlers finish or the shutdown timeout expires.

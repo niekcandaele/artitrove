@@ -205,7 +205,7 @@ func staticFiles() http.Handler {
 		w.Header().Set("Cache-Control", staticCacheControl)
 		name := strings.TrimPrefix(r.URL.Path, ui.StaticPath)
 		if info, err := fs.Stat(ui.Static(), name); err != nil || info.IsDir() {
-			http.NotFound(w, r)
+			writeError(w, http.StatusNotFound, "not found")
 			return
 		}
 		files.ServeHTTP(w, r)
