@@ -97,7 +97,7 @@ The human view renders HTML (in a sandboxed frame), Markdown, JSON and plain tex
 mkdir -p ~/.claude/skills && cp -r skill/artitrove ~/.claude/skills/
 ```
 
-For other agents, put `SKILL.md` wherever they load instructions from. The agent's environment needs `ARTITROVE_URL` and `ARTITROVE_TOKEN`, and the machine needs `curl` and `jq`.
+For other agents, put `SKILL.md` wherever they load instructions from. The agent's environment needs `ARTITROVE_URL` and `ARTITROVE_TOKEN`, and the machine needs `curl`.
 
 ## Develop
 
