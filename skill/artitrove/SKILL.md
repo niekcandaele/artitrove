@@ -23,7 +23,7 @@ curl -sS --fail-with-body -X POST "$ARTITROVE_URL/api/artifacts" \
   --data-binary @notes.md
 ```
 
-Change the file, the `Content-Type` and the title (up to 200 characters, optional). Use `--data-binary @-` to read from stdin. With curl older than 7.87, drop `--url-query` and append a URL-encoded `?title=` to the URL.
+Change the file, the `Content-Type` and the title (up to 200 characters, optional). Use `--data-binary @-` to read from stdin. With curl older than 7.87, drop `--url-query` and append a URL-encoded `?title=` to the URL; older than 7.76, also replace `--fail-with-body` with `-w '%{http_code}\n'` and check the printed status.
 
 | File | Content-Type | Human view |
 |---|---|---|

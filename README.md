@@ -66,10 +66,10 @@ Run Artitrove on a private network (LAN, VPN or tailnet) or on localhost if you 
 If you expose it publicly, put it behind a reverse proxy that terminates TLS, set `ARTITROVE_BASE_URL` to the `https` address, and use a long random token. Keep these limits in mind:
 
 - The index uses basic auth, which sends the token with every request. Enable `ARTITROVE_INDEX` only behind TLS.
-- There is no rate limiting. Anyone who guesses the token can fill your disk up to the per-upload limit, repeatedly.
+- There is no rate limiting or quota. Anyone who holds the token can fill your disk, and nothing slows down attempts to guess it.
 - Links leak through chat logs, browser history and forwarding. The `no-referrer` and `noindex` headers do not prevent that.
 - Raw HTML artifacts are untrusted pages written by a model, served from your hostname. The sandbox gives them an opaque origin, so they cannot call the Artitrove API, but their scripts can still send data to other sites, and a page can imitate a login form. Never type credentials into an artifact. Consider a hostname dedicated to Artitrove.
-- Everything is kept forever and nothing is encrypted at rest.
+- Nothing expires: an artifact stays until someone deletes it with the token. Nothing is encrypted at rest.
 
 Back up the data directory (`artitrove.db` and `blobs/`). In Compose that is the `artitrove-data` volume.
 
