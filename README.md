@@ -47,7 +47,7 @@ All configuration is by environment variable. The server exits at start and list
 | `ARTITROVE_MAX_SIZE` | `10485760` | Maximum upload size in bytes (10 MiB). Must be a positive integer. |
 | `ARTITROVE_INDEX` | `false` | Set to `true` to list all artifacts on `/`. Accepts any Go `ParseBool` value. |
 
-Agents use the same token under a different pair of names: their `ARTITROVE_URL` holds the server's `ARTITROVE_BASE_URL` value, and `ARTITROVE_TOKEN` is identical on both sides.
+Agents need two variables: `ARTITROVE_URL`, set to the server's `ARTITROVE_BASE_URL` value, and `ARTITROVE_TOKEN`, the same token the server uses.
 
 ## Access model
 
