@@ -9,7 +9,7 @@ Artitrove stores files and gives back a link. Needs only `curl`.
 
 ## Setup
 
-`ARTITROVE_URL` (server address, no trailing slash) and `ARTITROVE_TOKEN` must be set in the environment. If either is unset, ask the human for it and stop. Never print the token.
+`ARTITROVE_URL` (server address, no trailing slash) and `ARTITROVE_TOKEN` must be set in the environment. If either is unset, ask the human for it and stop. Never print the token. If the environment does not persist between commands, read the token from a file at call time (for example `-H "Authorization: Bearer $(cat ~/.artitrove-token)"`) and never write the literal value into a command.
 
 ## Upload
 
@@ -35,6 +35,8 @@ Change the file, the `Content-Type` and the title (up to 200 characters, optiona
 | `.pdf` | `application/pdf` | download link only |
 | anything else | `application/octet-stream` | download link only |
 
+`application/json` has no charset on purpose: JSON is UTF-8 by definition. The `Content-Type` is stored exactly as sent.
+
 On success it prints JSON with `id`, `url` and `raw_url`.
 
 ## Hand back the link
@@ -51,6 +53,8 @@ No token needed; the link is the permission. Fetching either `url` or `raw_url` 
 curl -sS --fail-with-body "$ARTITROVE_URL/a/$ID/raw"
 curl -sS --fail-with-body "$ARTITROVE_URL/api/artifacts/$ID"
 ```
+
+To confirm the stored bytes match your local file, compare them: `curl -sS "$ARTITROVE_URL/a/$ID/raw" | cmp - notes.md` (silent when identical), or compare `sha256sum notes.md` with the metadata `sha256`.
 
 ## New version or delete
 
