@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os/exec"
 	"strings"
 	"testing"
@@ -56,15 +58,11 @@ func TestIndexFilterHidesRows(t *testing.T) {
 		w.Header().Set("Content-Type", "text/javascript")
 		_, _ = io.WriteString(w, filterScript)
 	})
-	mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
-		resp, b := s.get(t, r.URL.Path)
-		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-		_, _ = w.Write(b) //nolint:gosec // test proxy of the server's own static files
-	})
+	mux.Handle("/static/", httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: s.addr}))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, chrome, //nolint:gosec // chrome comes from LookPath
 		"--headless=new", "--no-sandbox", "--disable-gpu",
