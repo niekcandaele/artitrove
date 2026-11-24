@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 const firefoxAccept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
@@ -316,5 +317,33 @@ func TestNoExternalRequests(t *testing.T) {
 	_, js := s.get(t, "/static/app.js")
 	if m := jsExtRe.FindString(string(js)); m != "" {
 		t.Errorf("app.js contains external URL literal %q", m)
+	}
+}
+
+func TestViewOversizedMarkdownFallsBackToText(t *testing.T) {
+	t.Parallel()
+	s := newServer(t)
+	a := s.upload(t, []byte("<b>x</b>"+strings.Repeat("[a](", 50000)), "text/markdown", "")
+	start := time.Now()
+	page := htmlView(t, s, a.ID)
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("view took %v", d)
+	}
+	contains(t, "plain text body", page, "&lt;b&gt;x&lt;/b&gt;[a]([a](")
+	lacks(t, "page", page, "<b>x")
+}
+
+func TestViewHighlightBudget(t *testing.T) {
+	t.Parallel()
+	s := newServer(t)
+	block := "```crystal\n" + strings.Repeat("1", 3000) + "x\n```\n\n"
+	a := s.upload(t, []byte(strings.Repeat(block, 15)), "text/markdown", "")
+	start := time.Now()
+	page := htmlView(t, s, a.ID)
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("view took %v", d)
+	}
+	if n := strings.Count(page, "hl-chroma"); n != 2 {
+		t.Errorf("highlighted blocks = %d, want 2 of 15 (8 KiB budget, 3002-byte blocks)", n)
 	}
 }

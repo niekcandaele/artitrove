@@ -2,8 +2,11 @@ package render
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"html/template"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -18,19 +21,23 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
+// Every page view renders anew, and goldmark is quadratic on crafted input such as "[a](" or
+// ">" repeated, while chroma lexers can take about 1 ms per byte on crafted code. So the work per
+// view is bounded: the source size, the total highlighted code, and the concurrent renders.
+const (
+	maxMarkdownSize = 64 << 10
+	highlightBudget = 8 << 10
+)
+
+// ErrTooLarge means the source is over the size that is rendered; callers show it as text.
+var ErrTooLarge = errors.New("markdown source too large to render")
+
+var renderSlots = make(chan struct{}, max(1, runtime.GOMAXPROCS(0)/2))
+
 // The extensions are listed one by one: extension.GFM would register a second table renderer
 // that emits style= attributes. Attribute syntax and auto heading IDs stay off, so
 // "{onclick=...}" remains text and headings get no id (no DOM clobbering).
-var (
-	mdHighlighted = newMarkdown(true)
-	mdPlain       = newMarkdown(false)
-)
-
-// maxHighlightSize bounds the Markdown source that gets syntax highlighting: chroma output is
-// about 15 times its input and takes about 2 µs per byte, and every page view renders anew.
-const maxHighlightSize = 512 << 10
-
-func newMarkdown(highlight bool) goldmark.Markdown {
+func newMarkdown(budget int) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(
 			extension.NewTable(extension.WithTableCellAlignMethod(extension.TableCellAlignAttribute)),
@@ -39,7 +46,7 @@ func newMarkdown(highlight bool) goldmark.Markdown {
 			extension.TaskList,
 		),
 		goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(linkSafety{}, 100))),
-		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(nodeRenderer{highlight}, 100))),
+		goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(&nodeRenderer{budget: budget}, 100))),
 	)
 }
 
@@ -52,22 +59,30 @@ func newMarkdown(highlight bool) goldmark.Markdown {
 //   - Fenced code is highlighted with chroma using CSS classes only: html.WithClasses(true),
 //     HighlightClassPrefix, and a <pre class="hl-chroma"> wrapper. An unknown or absent
 //     language gives an escaped plain <pre><code>. If highlighting fails, the block falls
-//     back to the escaped plain <pre><code>. Sources over 512 KiB are not highlighted at all.
+//     back to the escaped plain <pre><code>. Once a document has had 8 KiB of code highlighted,
+//     later blocks stay plain. Sources over 64 KiB are refused with ErrTooLarge.
 //   - An <img> is emitted only when the destination is a same-origin relative URL (no scheme
 //     and not starting with "//"). Any other image is rendered as <a href="dest">alt text</a>
 //     (or dest when alt is empty), because the page CSP blocks external and data: images.
 //     Inside a link such an image renders its alt text only.
 //     The scheme stripping above still applies.
 //
-// The output contains no style attributes and no script. Errors: only those from goldmark's Convert.
-func Markdown(src []byte) (template.HTML, error) {
-	src = bytes.ToValidUTF8(src, []byte("�"))
-	md := mdHighlighted
-	if len(src) > maxHighlightSize {
-		md = mdPlain
+// The output contains no style attributes and no script. Errors: ErrTooLarge, and those from
+// goldmark's Convert. At most GOMAXPROCS/2 renders run at once; others wait, and return ctx.Err()
+// if ctx ends first, so a client that went away does not leave queued work behind.
+func Markdown(ctx context.Context, src []byte) (template.HTML, error) {
+	if len(src) > maxMarkdownSize {
+		return "", ErrTooLarge
 	}
+	select {
+	case renderSlots <- struct{}{}:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	defer func() { <-renderSlots }()
+	src = bytes.ToValidUTF8(src, []byte("�"))
 	var buf bytes.Buffer
-	if err := md.Convert(src, &buf); err != nil {
+	if err := newMarkdown(highlightBudget).Convert(src, &buf); err != nil {
 		return "", err
 	}
 	return template.HTML(buf.String()), nil //nolint:gosec // raw HTML is disabled and links are filtered
@@ -145,9 +160,10 @@ func (linkSafety) Transform(doc *ast.Document, reader text.Reader, _ parser.Cont
 }
 
 // nodeRenderer overrides the default image and fenced code renderers.
-type nodeRenderer struct{ highlight bool }
+// budget is the number of code bytes still allowed to be highlighted in this document.
+type nodeRenderer struct{ budget int }
 
-func (r nodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+func (r *nodeRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindImage, renderImage)
 	reg.Register(ast.KindFencedCodeBlock, r.renderFenced)
 }
@@ -219,7 +235,7 @@ func renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) 
 	return ast.WalkSkipChildren, nil
 }
 
-func (r nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+func (r *nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if !entering {
 		return ast.WalkContinue, nil
 	}
@@ -229,8 +245,9 @@ func (r nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.Nod
 		seg := n.Lines().At(i)
 		code.Write(seg.Value(source))
 	}
-	if r.highlight {
-		if highlighted, ok := highlight(string(n.Language(source)), code.String()); ok {
+	if lexer := lookupLexer(string(n.Language(source))); lexer != nil && code.Len() <= r.budget {
+		r.budget -= code.Len()
+		if highlighted, ok := highlight(lexer, code.String()); ok {
 			_, _ = w.WriteString(highlighted)
 			return ast.WalkSkipChildren, nil
 		}
@@ -241,16 +258,17 @@ func (r nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.Nod
 	return ast.WalkSkipChildren, nil
 }
 
-// highlight reports false when the language is unknown or highlighting fails, e.g. on a
-// regexp timeout; the caller then shows the plain escaped block.
-func highlight(lang, code string) (string, bool) {
+// lookupLexer returns nil for an absent or unknown language.
+func lookupLexer(lang string) chroma.Lexer {
 	if lang == "" {
-		return "", false
+		return nil
 	}
-	lexer := lexers.Get(lang)
-	if lexer == nil {
-		return "", false
-	}
+	return lexers.Get(lang)
+}
+
+// highlight reports false when highlighting fails, e.g. on a regexp timeout; the caller then
+// shows the plain escaped block.
+func highlight(lexer chroma.Lexer, code string) (string, bool) {
 	it, err := chroma.Coalesce(lexer).Tokenise(nil, code)
 	if err != nil {
 		return "", false

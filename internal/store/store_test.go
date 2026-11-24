@@ -422,3 +422,30 @@ func TestCreateInsertFailureRemovesBlob(t *testing.T) {
 	}
 	assertNoStrayFiles(t, dir)
 }
+
+func TestOpenRemovesStaleUploads(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data[1]") // glob metacharacters must not matter
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(dir, uploadPrefix+"abc")
+	if err := os.WriteFile(stale, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := create(t, s, "kept", "content")
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s2.Close() })
+	if _, err := os.Stat(stale); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("stale upload still present: %v", err)
+	}
+	if _, err := s2.Get(ctx, a.ID); err != nil {
+		t.Errorf("existing artifact lost: %v", err)
+	}
+}

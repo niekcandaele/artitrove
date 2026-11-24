@@ -64,6 +64,9 @@ func Register(mux *http.ServeMux, cfg config.Config, store artifact.Store) {
 	})
 }
 
+// uploadReadTimeout bounds how long an authenticated upload may take to arrive.
+const uploadReadTimeout = time.Hour
+
 func create(w http.ResponseWriter, r *http.Request, cfg config.Config, store artifact.Store) {
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
@@ -85,6 +88,12 @@ func create(w http.ResponseWriter, r *http.Request, cfg config.Config, store art
 	}
 	if len(contentType) > MaxContentTypeLen {
 		writeError(w, http.StatusBadRequest, "content type too long")
+		return
+	}
+	// A token holder may upload slowly; the short default read deadline set by the server wrapper
+	// applies to everyone else.
+	if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(uploadReadTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		internalError(w, "set read deadline", err)
 		return
 	}
 	body := http.MaxBytesReader(w, r.Body, cfg.MaxSize)

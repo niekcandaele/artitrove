@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
 	"regexp"
 	"strings"
@@ -158,7 +159,7 @@ var markdownCorpus = []string{
 
 func TestMarkdownCorpusSafe(t *testing.T) {
 	for _, src := range markdownCorpus {
-		out, err := Markdown([]byte(src))
+		out, err := Markdown(t.Context(), []byte(src))
 		if err != nil {
 			t.Fatalf("%q: %v", src, err)
 		}
@@ -173,7 +174,10 @@ func FuzzMarkdown(f *testing.F) {
 		f.Add([]byte(s))
 	}
 	f.Fuzz(func(t *testing.T, src []byte) {
-		out, err := Markdown(src)
+		out, err := Markdown(t.Context(), src)
+		if errors.Is(err, ErrTooLarge) {
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
