@@ -1,0 +1,12 @@
+.git
+.github
+.worktrees
+.superdesign
+bin
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+Dockerfile
+compose.yaml
