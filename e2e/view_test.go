@@ -114,6 +114,8 @@ func TestViewHeader(t *testing.T) {
 	contains(t, "time", page, `<time datetime="`+a.CreatedAt+`"`)
 	contains(t, "raw link", page, `href="/a/`+a.ID+`/raw"`)
 	contains(t, "share url", page, a.URL)
+	contains(t, "copy link", text, "Copy link")
+	contains(t, "mobile viewport", page, `<meta name="viewport" content="width=device-width`)
 
 	bare := s.upload(t, []byte("x"), "text/plain", "")
 	text = html.UnescapeString(htmlView(t, s, bare.ID))
@@ -124,7 +126,7 @@ func TestViewMarkdown(t *testing.T) {
 	t.Parallel()
 	s := newServer(t)
 	src := "# Hello\n\n```go\nfunc main() {}\n```\n\n" +
-		"![a](/static/favicon.svg)\n\n" +
+		"![a](/static/favicon.svg) ![r](pics/r.png)\n\n" +
 		"![x](https://evil.test/p.png)\n\n![y](//evil.test/p.png)\n\n" +
 		"<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n" +
 		"[a](javascript:alert(1)) [b](JaVaScRiPt:alert(1)) [c](vbscript:x) [d](data:text/html,x)\n\n" +
@@ -138,7 +140,8 @@ func TestViewMarkdown(t *testing.T) {
 		contains(t, "highlight", page, "hl-chroma")
 		contains(t, "highlight css link", page, `href="/static/highlight.css"`)
 		contains(t, "local image", page, `<img src="/static/favicon.svg"`)
-		eq(t, "img count", strings.Count(page, "<img"), 1)
+		contains(t, "relative image", page, `<img src="pics/r.png"`)
+		eq(t, "img count", strings.Count(page, "<img"), 2)
 		contains(t, "external image as link", page, `<a href="https://evil.test/p.png"`)
 		lacks(t, "page", page, "<script>alert")
 		lacks(t, "page", page, "<img src=x")
@@ -305,6 +308,7 @@ func TestNoExternalRequests(t *testing.T) {
 	}
 
 	_, css := s.get(t, "/static/app.css")
+	contains(t, "app.css follows the system theme", string(css), "prefers-color-scheme: dark")
 	for _, m := range cssURLRe.FindAllStringSubmatch(string(css), -1) {
 		ref := m[1]
 		if !strings.Contains(ref, ":") && !strings.HasPrefix(ref, "/") {
