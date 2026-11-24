@@ -45,7 +45,7 @@ var _ artifact.Store = (*Store)(nil)
 
 // Open creates dataDir and dataDir/blobs with mode 0o700 if missing. It opens
 // <dataDir>/artitrove.db (modernc.org/sqlite), creating the file 0o600 first if absent, and
-// creates the artifacts table if absent. Blob and temp files are 0o600. It returns any
+// creates the artifacts table if absent. It first deletes leftover temp upload files. Blob and temp files are 0o600. It returns any
 // filesystem or SQL error.
 func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(dataDir, "blobs"), 0o700); err != nil {
@@ -54,6 +54,9 @@ func Open(dataDir string) (*Store, error) {
 	root, err := os.OpenRoot(dataDir)
 	if err != nil {
 		return nil, err
+	}
+	if err := removeStaleUploads(dataDir); err != nil {
+		return nil, errors.Join(err, root.Close())
 	}
 	// SQLite gives the -wal and -shm files the mode of the db file.
 	f, err := root.OpenFile(dbName, os.O_RDWR|os.O_CREATE, 0o600)
@@ -73,10 +76,27 @@ func Open(dataDir string) (*Store, error) {
 	return &Store{db: db, root: root}, nil
 }
 
+// removeStaleUploads deletes temp files that a crash or a shutdown timeout left in the data
+// directory. Nothing else writes there before Open returns.
+func removeStaleUploads(dataDir string) error {
+	stale, err := filepath.Glob(filepath.Join(dataDir, uploadPrefix+"*"))
+	if err != nil {
+		return err
+	}
+	for _, name := range stale {
+		if err := os.Remove(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Close releases the database.
 func (s *Store) Close() error {
 	return errors.Join(s.db.Close(), s.root.Close())
 }
+
+const uploadPrefix = ".upload-"
 
 func blobName(id string) string { return "blobs/" + id }
 
@@ -98,7 +118,7 @@ func newID() string {
 // Create implements artifact.Store.Create. IDs are 16 crypto/rand bytes, base64url without padding.
 func (s *Store) Create(ctx context.Context, title, contentType string, content io.Reader) (a artifact.Artifact, err error) {
 	id := newID()
-	tmp := ".upload-" + newID() // the id is a credential, so it must not show in a directory listing
+	tmp := uploadPrefix + newID() // the id is a credential, so it must not show in a directory listing
 	f, err := s.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return artifact.Artifact{}, err
