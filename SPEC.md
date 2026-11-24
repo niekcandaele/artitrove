@@ -29,7 +29,7 @@ Token comparison is constant-time. A missing or wrong token returns `401` with a
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | 16 bytes from `crypto/rand`, base64url without padding (22 characters) |
-| `title` | string | Optional. The human view falls back to the ID. Max 200 characters. |
+| `title` | string | Optional. The human view falls back to the ID. Max 200 characters (Unicode code points); a longer title or invalid UTF-8 is rejected with `400`. |
 | `content_type` | string | The media type sent on upload, parameters preserved. Defaults to `application/octet-stream`. |
 | `size` | integer | Bytes |
 | `sha256` | string | Hex digest of the content |
@@ -79,7 +79,7 @@ Returns the exact bytes with the stored `Content-Type`, plus:
 
 ### `GET /a/{id}` (link)
 
-The human view (see below). If the request's `Accept` header does not include `text/html`, the server responds exactly as `/a/{id}/raw` does, so a bare `curl` gets the content.
+The human view (see below). If the request's `Accept` header does not include `text/html`, the server responds exactly as `/a/{id}/raw` does, so a bare `curl` gets the content. `*/*` alone does not count as asking for HTML. The response always carries `Vary: Accept`.
 
 ### `GET /api/artifacts/{id}` (link)
 
@@ -97,7 +97,7 @@ The landing page: what Artitrove is and how to upload. When `ARTITROVE_INDEX=tru
 
 `200` with `{"status":"ok"}`.
 
-Unknown IDs return `404` on every route.
+Unknown IDs return `404` on every route. The human view answers with an HTML not-found page; every other route answers with the JSON error.
 
 ## Human view
 
@@ -106,7 +106,7 @@ A slim header shows the title, content type, size, creation time, and two action
 | Content type | Rendering |
 |---|---|
 | `text/html` | `<iframe sandbox="allow-scripts" src="/a/{id}/raw">`, filling the viewport below the header |
-| `text/markdown` | Rendered to HTML server-side, with syntax-highlighted code blocks |
+| `text/markdown` | Rendered to HTML server-side, with syntax-highlighted code blocks. Images with a same-origin relative URL are shown; any other image becomes a link, because the page CSP blocks external images. |
 | `application/json` | Pretty-printed, collapsible tree. Invalid JSON falls back to plain text. |
 | `text/*` and common code types | Monospace, with line wrapping |
 | Anything else | Type, size and a download link to the raw URL |
@@ -121,7 +121,7 @@ Artifacts are untrusted content written by a model. These rules are not negotiab
 2. **App pages never inject artifact content as HTML.** Markdown is rendered with raw HTML disabled and unsafe link schemes stripped. JSON and text go through `html/template` escaping.
 3. App pages send `Content-Security-Policy: default-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'`.
 4. Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The second matters because the URL is the credential.
-5. Artifact pages carry `X-Robots-Tag: noindex`.
+5. Every response carries `X-Robots-Tag: noindex`.
 6. IDs are never used to build file paths without validation against the ID format.
 
 ## Configuration
@@ -131,7 +131,7 @@ All configuration is by environment variable.
 | Variable | Default | Notes |
 |---|---|---|
 | `ARTITROVE_TOKEN` | none | Required. The server exits with a clear error if it is unset or shorter than 16 characters. |
-| `ARTITROVE_BASE_URL` | `http://localhost:8080` | Used to build `url` and `raw_url`. No trailing slash. |
+| `ARTITROVE_BASE_URL` | `http://localhost:8080` | Used to build `url` and `raw_url`. Scheme and host only: no path, no trailing slash. |
 | `ARTITROVE_LISTEN` | `:8080` | Listen address |
 | `ARTITROVE_DATA_DIR` | `./data` | Created on start if missing |
 | `ARTITROVE_MAX_SIZE` | `10485760` | Max upload size in bytes (10 MB) |
@@ -152,6 +152,7 @@ On upload, the content is written to a temp file in the data directory, fsynced,
 - `html/template` with templates and static assets embedded via `embed`.
 - No JS build step. Client-side JS is small, hand-written, and optional for reading.
 - Graceful shutdown on SIGINT and SIGTERM.
+- Lint with `make lint`, which pins a golangci-lint release that supports this Go version. A bare `golangci-lint run` may fail on an older local binary.
 
 ## Repository layout
 
