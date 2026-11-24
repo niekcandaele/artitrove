@@ -120,7 +120,7 @@ func TestAuthMatrix(t *testing.T) {
 	m := e.upload(t, "hello", "text/plain", "")
 	id := m["id"].(string)
 	headers := []string{
-		"", "Basic dXNlcjp0b2tlbg==", "Bearer", "Bearer ", "bearer " + token, "Bearer  " + token,
+		"", "Basic dXNlcjp0b2tlbg==", "Basic " + token, "Bearer", "Bearer ", "Bearer" + token, "Bearer  " + token,
 		"Bearer " + token + " ", "Bearer " + token[:len(token)-1], "Bearer " + token + "x", "Bearer wrong-token-of-same-",
 	}
 	for _, h := range headers {
@@ -156,8 +156,11 @@ func TestAuthMatrix(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.mux.ServeHTTP(rec, req)
 	assertJSONError(t, rec, 401)
-	// correct token
+	// correct token; the scheme is case-insensitive
 	if rec := e.do("POST", "/api/artifacts", strings.NewReader("x"), auth()); rec.Code != 201 {
+		t.Fatal(rec.Code)
+	}
+	if rec := e.do("POST", "/api/artifacts", strings.NewReader("x"), map[string]string{"Authorization": "bEARER " + token}); rec.Code != 201 {
 		t.Fatal(rec.Code)
 	}
 	if rec := e.do("DELETE", "/api/artifacts/"+id, nil, auth()); rec.Code != 204 {
