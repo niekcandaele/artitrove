@@ -78,7 +78,7 @@ summary.btn::-webkit-details-marker { display: none; }
 .reading ul, .reading ol { padding-left: 22px; }
 .reading blockquote { padding-left: 14px; border-left: 3px solid var(--line); color: var(--muted); }
 .reading hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
-.reading a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.reading a, .note a { color: var(--ink); text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .reading code, .foot code, .two code { font-family: var(--mono); font-size: 0.88em; }
 .reading code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
 .reading img { max-width: 100%; height: auto; }

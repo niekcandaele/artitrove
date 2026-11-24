@@ -113,7 +113,7 @@ func view(cfg config.Config, store artifact.Store, raw http.Handler) http.Handle
 			if kind == render.KindText {
 				if len(src) > maxTextPreview {
 					n := maxTextPreview
-					for !utf8.RuneStart(src[n]) {
+					for n > maxTextPreview-utf8.UTFMax && !utf8.RuneStart(src[n]) {
 						n--
 					}
 					src, page.Truncated = src[:n], true

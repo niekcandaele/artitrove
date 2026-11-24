@@ -493,3 +493,11 @@ func TestLargeTextIsCutAtRuneBoundary(t *testing.T) {
 		t.Error("note on a small file")
 	}
 }
+
+func TestLargeInvalidUTF8TextIsCut(t *testing.T) {
+	e := newEnv(t, false)
+	id := e.create("T", "text/plain", strings.Repeat("\x80", maxTextPreview+10))
+	if rec, body := e.page("/a/" + id); rec.Code != 200 || !strings.Contains(body, `class="note"`) {
+		t.Errorf("invalid utf-8: %d", rec.Code)
+	}
+}
