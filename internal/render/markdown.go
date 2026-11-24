@@ -13,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
+	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
@@ -72,38 +73,29 @@ func Markdown(src []byte) (template.HTML, error) {
 	return template.HTML(buf.String()), nil //nolint:gosec // raw HTML is disabled and links are filtered
 }
 
-// normalizeURL mimics what browsers ignore before parsing a URL: tabs and newlines anywhere,
-// and leading control characters and spaces.
-func normalizeURL(dest string) string {
-	dest = strings.NewReplacer("\t", "", "\n", "", "\r", "").Replace(dest)
-	return strings.TrimLeftFunc(dest, func(r rune) bool { return r <= 0x20 })
-}
-
-// decodeDest resolves what goldmark's renderer would: the AST keeps destinations raw, so
-// "&#106;avascript:" is still an entity here.
-func decodeDest(dest []byte) string {
-	return string(util.UnescapePunctuations(util.ResolveNumericReferences(util.ResolveEntityNames(dest))))
+// emittedURL is the href or src goldmark writes for a raw AST destination, before attribute
+// escaping (which the browser undoes). Checking it rather than a separate decoding means the
+// checks see exactly what the browser parses: entities and backslash escapes are resolved, and
+// spaces, controls, backslashes and non-ASCII are percent-encoded, so none can hide a scheme or
+// turn a path into "//host".
+func emittedURL(dest []byte) string {
+	return string(util.URLEscape(dest, true))
 }
 
 var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
 // dangerous allows only relative URLs and a few schemes: besides javascript:, vbscript:,
 // file: and data:, custom handlers such as ms-msdt: or vscode: can launch local programs.
-func dangerous(dest string) bool {
-	switch strings.ToLower(schemeRe.FindString(normalizeURL(dest))) {
+func dangerous(u string) bool {
+	switch strings.ToLower(schemeRe.FindString(u)) {
 	case "", "http:", "https:", "mailto:":
 		return false
 	}
 	return true
 }
 
-// sameOriginRelative is stricter than "//": browsers treat a backslash as a slash.
-func sameOriginRelative(dest string) bool {
-	u := normalizeURL(dest)
-	if schemeRe.MatchString(u) {
-		return false
-	}
-	return len(u) < 2 || !strings.ContainsRune("/\\", rune(u[0])) || !strings.ContainsRune("/\\", rune(u[1]))
+func sameOriginRelative(u string) bool {
+	return !schemeRe.MatchString(u) && !strings.HasPrefix(u, "//")
 }
 
 // linkSafety removes links and images with dangerous destinations, keeping their text.
@@ -119,15 +111,15 @@ func (linkSafety) Transform(doc *ast.Document, reader text.Reader, _ parser.Cont
 		}
 		switch n := n.(type) {
 		case *ast.Link:
-			if dangerous(decodeDest(n.Destination)) {
+			if dangerous(emittedURL(n.Destination)) {
 				bad = append(bad, n)
 			}
 		case *ast.Image:
-			if dangerous(decodeDest(n.Destination)) {
+			if dangerous(emittedURL(n.Destination)) {
 				bad = append(bad, n)
 			}
 		case *ast.AutoLink:
-			if dangerous(decodeDest(n.URL(source))) {
+			if dangerous(emittedURL(n.URL(source))) {
 				bad = append(bad, n)
 			}
 		}
@@ -138,7 +130,9 @@ func (linkSafety) Transform(doc *ast.Document, reader text.Reader, _ parser.Cont
 		node := bad[i]
 		parent := node.Parent()
 		if al, ok := node.(*ast.AutoLink); ok {
-			parent.ReplaceChild(parent, node, ast.NewString(al.Label(source)))
+			label := ast.NewString(al.Label(source))
+			label.SetRaw(true) // autolink labels are literal: no entities or backslash escapes
+			parent.ReplaceChild(parent, node, label)
 			continue
 		}
 		for c := node.FirstChild(); c != nil; {
@@ -192,26 +186,34 @@ func renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) 
 		return ast.WalkContinue, nil
 	}
 	n := node.(*ast.Image)
-	dest := decodeDest(n.Destination)
-	alt := plainText(n, source)
-	href := string(util.EscapeHTML(util.URLEscape(n.Destination, true)))
+	dest := emittedURL(n.Destination)
+	alt := []byte(plainText(n, source))
+	href := string(util.EscapeHTML([]byte(dest)))
+	// Alt and title are raw source; goldmark's writer resolves entities and backslash escapes
+	// and then escapes, as the default renderer does.
 	switch {
 	case sameOriginRelative(dest):
-		_, _ = w.WriteString(`<img src="` + href + `" alt="` + string(util.EscapeHTML([]byte(alt))) + `"`)
+		_, _ = w.WriteString(`<img src="` + href + `" alt="`)
+		gmhtml.DefaultWriter.Write(w, alt)
+		_ = w.WriteByte('"')
 		if n.Title != nil {
-			_, _ = w.WriteString(` title="` + string(util.EscapeHTML(n.Title)) + `"`)
+			_, _ = w.WriteString(` title="`)
+			gmhtml.DefaultWriter.Write(w, n.Title)
+			_ = w.WriteByte('"')
 		}
 		_, _ = w.WriteString(">")
 	default:
-		label := alt
-		if label == "" {
-			label = dest
+		inLink := hasLinkAncestor(n)
+		if !inLink {
+			_, _ = w.WriteString(`<a href="` + href + `">`)
 		}
-		label = string(util.EscapeHTML([]byte(label)))
-		if hasLinkAncestor(n) {
-			_, _ = w.WriteString(label)
+		if len(alt) == 0 {
+			_, _ = w.Write(util.EscapeHTML([]byte(dest)))
 		} else {
-			_, _ = w.WriteString(`<a href="` + href + `">` + label + `</a>`)
+			gmhtml.DefaultWriter.Write(w, alt)
+		}
+		if !inLink {
+			_, _ = w.WriteString("</a>")
 		}
 	}
 	return ast.WalkSkipChildren, nil

@@ -20,7 +20,7 @@ func TestMarkdownUnsafeSchemesKeepText(t *testing.T) {
 	for _, src := range []string{
 		"[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x](&#106;avascript:alert(1))", "[x](javascript&#58;alert(1))",
 		"[x](vbscript:1)", "[x](file:///etc/passwd)", "[x](data:text/html;base64,AAAA)", "[x](data:image/png;base64,AAAA)",
-		"[x][r]\n\n[r]: javascript:alert(1)", "[x](< javascript:alert(1)>)",
+		"[x][r]\n\n[r]: javascript:alert(1)", `[x](foo\&colon;bar)`,
 		"[a](javascript:1) [x](javascript:2) [c](javascript:3)", "*[x](javascript:1)*", "**a [x](javascript:1) [b](javascript:2)**",
 		"|h|\n|-|\n|[x](javascript:1)|", "- [x](javascript:1)", "- [ ] [x](javascript:1)", "[![x](javascript:1)](javascript:2)",
 		"![x](javascript:alert(1))", "![x](data:image/svg+xml,<svg onload=alert(1)>)", "![[x](javascript:1)](y.png)",
@@ -34,6 +34,13 @@ func TestMarkdownUnsafeSchemesKeepText(t *testing.T) {
 			t.Errorf("%q lost text: %s", src, out)
 		}
 	}
+	// The space is percent-encoded, so the browser reads a relative path, not a scheme.
+	if out := md1(t, "[x](< javascript:alert(1)>)"); !strings.Contains(out, `<a href="%20javascript:alert(1)">`) {
+		t.Errorf("leading space: %s", out)
+	}
+	if out := md1(t, `<javascript:a\(1\)&amp;x>`); !strings.Contains(out, `javascript:a\(1\)&amp;amp;x`) {
+		t.Errorf("stripped autolink label: %s", out)
+	}
 	if out := md1(t, "<javascript:alert(1)>"); strings.Contains(out, "<a") || !strings.Contains(out, "javascript:alert(1)") {
 		t.Errorf("autolink: %s", out)
 	}
@@ -42,7 +49,7 @@ func TestMarkdownUnsafeSchemesKeepText(t *testing.T) {
 func TestMarkdownRawHTMLDropped(t *testing.T) {
 	for _, src := range []string{"<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "<svg onload=alert(1)>", "<style>a{}</style>"} {
 		out := md1(t, src)
-		if strings.Contains(out, "alert") && !strings.Contains(out, "omitted") {
+		if out != "<!-- raw HTML omitted -->\n" {
 			t.Errorf("%q: %s", src, out)
 		}
 	}
@@ -69,13 +76,12 @@ func TestMarkdownImages(t *testing.T) {
 	}
 	linkOnly("![a](https://evil/x.png)", "https://evil/x.png")
 	linkOnly("![a](//evil/x.png)", "//evil/x.png")
-	linkOnly(`![a](/\evil/x.png)`, `/%5Cevil/x.png`)
-	linkOnly(`![a](\\\\evil/x.png)`, `%5C%5Cevil/x.png`)
-	linkOnly("![a](< //evil/x.png>)", "%20//evil/x.png")
+	linkOnly("![a](&#47;/evil/x.png)", "//evil/x.png")
 	if out := md1(t, "![](https://evil/x.png)"); !strings.Contains(out, ">https://evil/x.png</a>") {
 		t.Errorf("empty alt: %s", out)
 	}
-	for _, src := range []string{"![a](img/x.png)", "![a](/a/ID/raw)"} {
+	// Percent-encoded, a backslash or space no longer reads as a slash, so these are same-origin paths.
+	for _, src := range []string{"![a](img/x.png)", "![a](/a/ID/raw)", `![a](/\evil/x.png)`, `![a](\\\\evil/x.png)`, "![a](< //evil/x.png>)"} {
 		if out := md1(t, src); !strings.Contains(out, "<img src=") {
 			t.Errorf("%q: %s", src, out)
 		}
@@ -88,6 +94,12 @@ func TestMarkdownImages(t *testing.T) {
 	}
 	if out := md1(t, "[x](mailto:a@b.example) [y](https://e) [z](#f)"); strings.Count(out, "<a href") != 3 {
 		t.Errorf("safe schemes: %s", out)
+	}
+	if out := md1(t, `![a&amp;b \* c](x.png "t&amp; \" q")`); !strings.Contains(out, `alt="a&amp;b * c" title="t&amp; &quot; q"`) {
+		t.Errorf("alt entities: %s", out)
+	}
+	if out := md1(t, `![a&amp;b](https://evil/x.png)`); !strings.Contains(out, ">a&amp;b</a>") {
+		t.Errorf("link label entities: %s", out)
 	}
 	if out := md1(t, `![a" onerror="alert(1)](x.png)`); !strings.Contains(out, "&quot;") {
 		t.Errorf("alt escape: %s", out)
