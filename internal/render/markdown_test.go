@@ -24,6 +24,7 @@ func TestMarkdownUnsafeSchemesKeepText(t *testing.T) {
 		"[a](javascript:1) [x](javascript:2) [c](javascript:3)", "*[x](javascript:1)*", "**a [x](javascript:1) [b](javascript:2)**",
 		"|h|\n|-|\n|[x](javascript:1)|", "- [x](javascript:1)", "- [ ] [x](javascript:1)", "[![x](javascript:1)](javascript:2)",
 		"![x](javascript:alert(1))", "![x](data:image/svg+xml,<svg onload=alert(1)>)", "![[x](javascript:1)](y.png)",
+		"[x](ms-msdt:/id)", "[x](vscode://file/x)", "[x](blob:https://e/1)", "![x](vscode://x)",
 	} {
 		out := md1(t, src)
 		if strings.Contains(out, "<a") {
@@ -81,6 +82,9 @@ func TestMarkdownImages(t *testing.T) {
 	}
 	if out := md1(t, "![**b**](x.png)"); !strings.Contains(out, `alt="b"`) || strings.Contains(out, "strong") || strings.Count(out, "b") != 1 {
 		t.Errorf("alt: %s", out)
+	}
+	if out := md1(t, "[x](mailto:a@b.example) [y](https://e) [z](#f)"); strings.Count(out, "<a href") != 3 {
+		t.Errorf("safe schemes: %s", out)
 	}
 	if out := md1(t, `![a" onerror="alert(1)](x.png)`); !strings.Contains(out, "&quot;") {
 		t.Errorf("alt escape: %s", out)

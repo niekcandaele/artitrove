@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -40,19 +41,21 @@ func unsafeReason(s string) string {
 		if !allowedTags[m[2]] {
 			return "tag " + m[2]
 		}
+		attrs := map[string]string{}
 		for _, a := range attrRe.FindAllStringSubmatch(m[3], -1) {
 			if !allowedAttr[a[1]] {
 				return "attribute " + a[1]
 			}
-			v := a[2]
-			if a[1] == "type" && v != "checkbox" {
-				return "input type " + v
-			}
-			if a[1] == "href" || a[1] == "src" {
-				if dangerous(html.UnescapeString(v)) {
-					return "url " + v
-				}
-			}
+			attrs[a[1]] = a[2]
+		}
+		if _, disabled := attrs["disabled"]; m[2] == "input" && (attrs["type"] != "checkbox" || !disabled) {
+			return "input " + m[3]
+		}
+		if v, ok := attrs["href"]; ok && !browserSafeURL(v) {
+			return "href " + v
+		}
+		if v, ok := attrs["src"]; ok && !browserSameOrigin(v) {
+			return "src " + v
 		}
 	}
 	// Backstops look at markup only: escaped text may legitimately say "onerror=".
@@ -69,6 +72,37 @@ func unsafeReason(s string) string {
 	return ""
 }
 
+// browserURL mimics how a browser reads an attribute value as a URL, independently of the
+// code under test: entities decoded, tabs and newlines dropped, leading controls trimmed.
+func browserURL(attr string) string {
+	u := strings.NewReplacer("\t", "", "\n", "", "\r", "").Replace(html.UnescapeString(attr))
+	return strings.TrimLeftFunc(u, func(r rune) bool { return r <= 0x20 })
+}
+
+func urlScheme(u string) string {
+	scheme, _, ok := strings.Cut(u, ":")
+	if !ok || scheme == "" || !unicode.IsLetter(rune(scheme[0])) ||
+		strings.TrimFunc(scheme, func(r rune) bool {
+			return r < 0x80 && (unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("+-.", r))
+		}) != "" {
+		return ""
+	}
+	return strings.ToLower(scheme)
+}
+
+func browserSafeURL(attr string) bool {
+	switch urlScheme(browserURL(attr)) {
+	case "", "http", "https", "mailto":
+		return true
+	}
+	return false
+}
+
+func browserSameOrigin(attr string) bool {
+	u := browserURL(attr)
+	return urlScheme(u) == "" && (len(u) < 2 || !strings.ContainsRune(`/\`, rune(u[0])) || !strings.ContainsRune(`/\`, rune(u[1])))
+}
+
 func assertSafe(t testing.TB, s string) {
 	t.Helper()
 	if r := unsafeReason(s); r != "" {
@@ -80,6 +114,8 @@ func TestAssertSafeSelf(t *testing.T) {
 	for _, bad := range []string{
 		`<img/src/onerror=x>`, `<a href=javascript:x>`, `<a href="javascript:x">`, `<script`,
 		`<p style="x">`, `<div onclick="x">`, `<a href="&#106;avascript:x">`, "a\xff",
+		`<a href="ms-msdt:x">`, `<img src="https://evil/x">`, `<img src="//evil/x">`, `<img src="&#92;&#92;evil/x">`,
+		`<input type="checkbox">`, `<input>`,
 	} {
 		if unsafeReason(bad) == "" {
 			t.Errorf("accepted %q", bad)
@@ -112,6 +148,9 @@ var markdownCorpus = []string{
 	"```go {style=\"x\"}\nfunc main() {}\n```", "    <script>x</script>", "`<script>`", "\xff\xfe<script>",
 	"www.example.com", "https://x.example/<script>", "a@b.example", "- [x] done",
 	"|a|b|\n|:-:|--:|\n|1|2|", "~~x~~", "> <b>q</b>", "[x]: <javascript:1>\n[x]",
+	"[x](ms-msdt:/id)", "[x](vscode://file/x)", "[x](blob:https://e/1)", "<vscode://file/x>", "![a](vscode://x)",
+	"![a](&#92;/evil/x.png)", "![a](&#92;&#92;evil/x.png)", "![a](&bsol;&bsol;evil/x.png)", `![a](\&#47;/evil/x.png)`,
+	"![a](&amp;#47;/evil/x.png)", "![a](/&#47;evil/x.png)", "![a](%2F%2Fevil/x.png)",
 }
 
 func TestMarkdownCorpusSafe(t *testing.T) {

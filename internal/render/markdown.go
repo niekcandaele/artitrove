@@ -44,7 +44,8 @@ func newMarkdown(highlight bool) goldmark.Markdown {
 
 // Markdown renders CommonMark + GFM to an HTML fragment that is safe to embed in an app page:
 //   - Raw HTML is dropped (no html.WithUnsafe).
-//   - javascript:, vbscript:, file: and data: link schemes are stripped.
+//   - Unsafe link schemes are stripped: only http:, https:, mailto: and relative URLs are
+//     kept, so javascript:, vbscript:, file:, data: and custom protocol handlers are dropped.
 //   - Tables use extension.WithTableCellAlignMethod(extension.TableCellAlignAttribute); the
 //     default emits style=, which the page CSP blocks.
 //   - Fenced code is highlighted with chroma using CSS classes only: html.WithClasses(true),
@@ -84,17 +85,17 @@ func decodeDest(dest []byte) string {
 	return string(util.UnescapePunctuations(util.ResolveNumericReferences(util.ResolveEntityNames(dest))))
 }
 
-func dangerous(dest string) bool {
-	u := strings.ToLower(normalizeURL(dest))
-	for _, p := range []string{"javascript:", "vbscript:", "file:", "data:"} {
-		if strings.HasPrefix(u, p) {
-			return true
-		}
-	}
-	return false
-}
-
 var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
+
+// dangerous allows only relative URLs and a few schemes: besides javascript:, vbscript:,
+// file: and data:, custom handlers such as ms-msdt: or vscode: can launch local programs.
+func dangerous(dest string) bool {
+	switch strings.ToLower(schemeRe.FindString(normalizeURL(dest))) {
+	case "", "http:", "https:", "mailto:":
+		return false
+	}
+	return true
+}
 
 // sameOriginRelative is stricter than "//": browsers treat a backslash as a slash.
 func sameOriginRelative(dest string) bool {
