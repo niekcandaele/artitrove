@@ -80,6 +80,15 @@ func (s *Store) Close() error {
 
 func blobName(id string) string { return "blobs/" + id }
 
+// syncBlobsDir makes a rename into blobs/ durable before the row that points at it is committed.
+func (s *Store) syncBlobsDir() error {
+	d, err := s.root.Open("blobs")
+	if err != nil {
+		return err
+	}
+	return errors.Join(d.Sync(), d.Close())
+}
+
 func newID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b) // never fails on supported platforms
@@ -89,7 +98,7 @@ func newID() string {
 // Create implements artifact.Store.Create. IDs are 16 crypto/rand bytes, base64url without padding.
 func (s *Store) Create(ctx context.Context, title, contentType string, content io.Reader) (a artifact.Artifact, err error) {
 	id := newID()
-	tmp := ".upload-" + id
+	tmp := ".upload-" + newID() // the id is a credential, so it must not show in a directory listing
 	f, err := s.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return artifact.Artifact{}, err
@@ -128,6 +137,9 @@ func (s *Store) Create(ctx context.Context, title, contentType string, content i
 		return artifact.Artifact{}, err
 	}
 	renamed = true
+	if err = s.syncBlobsDir(); err != nil {
+		return artifact.Artifact{}, err
+	}
 
 	a = artifact.Artifact{
 		ID:          id,
