@@ -12,7 +12,7 @@
 <header class="label">
 <a class="mark" href="/" aria-label="Artitrove home">{{template "mark"}}</a>
 <div class="label-main">
-<h1><bdi>{{or .Title .ID}}</bdi></h1>
+<h1{{if eq .Kind "html"}} title="{{or .Title .ID}}"{{end}}><bdi>{{or .Title .ID}}</bdi></h1>
 <div class="meta"><span class="type type-{{.Kind}}"><bdi>{{.ContentType}}</bdi></span><span>{{size .Size}}</span><time datetime="{{rfc3339 .CreatedAt}}">{{when .CreatedAt}}</time></div>
 </div>
 <span class="sr" role="status"></span>
