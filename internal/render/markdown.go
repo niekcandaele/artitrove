@@ -32,6 +32,10 @@ const (
 // ErrTooLarge means the source is over the size that is rendered; callers show it as text.
 var ErrTooLarge = errors.New("markdown source too large to render")
 
+// tableWrap gives every table a scroll container; "<table>" can only come from the table renderer
+// because raw HTML is off and text is escaped.
+var tableWrap = strings.NewReplacer("<table>", `<div class="tbl"><table>`, "</table>", "</table></div>")
+
 var renderSlots = make(chan struct{}, max(1, runtime.GOMAXPROCS(0)/2))
 
 // The extensions are listed one by one: extension.GFM would register a second table renderer
@@ -85,7 +89,7 @@ func Markdown(ctx context.Context, src []byte) (template.HTML, error) {
 	if err := newMarkdown(highlightBudget).Convert(src, &buf); err != nil {
 		return "", err
 	}
-	return template.HTML(buf.String()), nil //nolint:gosec // raw HTML is disabled and links are filtered
+	return template.HTML(tableWrap.Replace(buf.String())), nil //nolint:gosec // raw HTML is disabled and links are filtered
 }
 
 // emittedURL is the href or src goldmark writes for a raw AST destination, before attribute

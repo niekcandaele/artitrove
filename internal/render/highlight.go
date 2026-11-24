@@ -25,6 +25,7 @@ func HighlightCSS() string {
 	if err := formatter.WriteCSS(&sb, styleLight); err != nil {
 		panic(err)
 	}
+	sb.WriteString(".hl-chroma .hl-bp { color: #57606a } /* github's #6a737d is under 4.5:1 on the code background */\n")
 	sb.WriteString("}\n@media (prefers-color-scheme: dark) {\n")
 	if err := formatter.WriteCSS(&sb, styleDark); err != nil {
 		panic(err)

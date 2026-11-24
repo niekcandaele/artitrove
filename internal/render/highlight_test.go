@@ -34,3 +34,9 @@ func TestHighlightCSS(t *testing.T) {
 		}
 	}
 }
+
+func TestHighlightLightPseudoBuiltinContrast(t *testing.T) {
+	if !strings.Contains(HighlightCSS(), ".hl-chroma .hl-bp { color: #57606a }") {
+		t.Error("light .hl-bp override missing")
+	}
+}
