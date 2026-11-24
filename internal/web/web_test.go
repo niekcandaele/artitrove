@@ -383,7 +383,8 @@ func TestLandingIndexAuth(t *testing.T) {
 		}
 		rec := e.do("GET", "/", hdr)
 		if rec.Code != 401 || rec.Header().Get("WWW-Authenticate") != `Basic realm="Artitrove", charset="UTF-8"` ||
-			rec.Header().Get("Cache-Control") != "no-store" || strings.Contains(rec.Body.String(), id) {
+			rec.Header().Get("Cache-Control") != "no-store" || strings.Contains(rec.Body.String(), id) ||
+			rec.Header().Get("Content-Type") != "application/json" || strings.TrimSpace(rec.Body.String()) != `{"error":"unauthorized"}` {
 			t.Errorf("%s: %d %v", name, rec.Code, rec.Header())
 		}
 	}
@@ -463,8 +464,9 @@ func TestServerErrorOnStoreFailure(t *testing.T) {
 		t.Errorf("view: %d", rec.Code)
 	}
 	rec := e.do("GET", "/", map[string]string{"Authorization": "Basic " + basic("u", token)})
-	if rec.Code != 500 {
-		t.Errorf("landing: %d", rec.Code)
+	if rec.Code != 500 || rec.Header().Get("Content-Type") != "application/json" ||
+		strings.TrimSpace(rec.Body.String()) != `{"error":"internal server error"}` {
+		t.Errorf("landing: %d %v %q", rec.Code, rec.Header(), rec.Body.String())
 	}
 }
 

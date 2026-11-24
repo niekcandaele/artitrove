@@ -4,6 +4,7 @@ package web
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -41,9 +42,9 @@ const staticCacheControl = "public, max-age=3600"
 // With cfg.Index true, the landing page and its 401 carry "Cache-Control: no-store" because
 // the list holds credentials. Basic auth accepts any username with the token as password,
 // compared constant-time; failure gives 401 with `WWW-Authenticate: Basic realm="Artitrove",
-// charset="UTF-8"`. With the index off there is no auth and no list.
+// charset="UTF-8"` and a JSON error body. With the index off there is no auth and no list.
 //
-// Internal errors are logged with slog and return 500.
+// Internal errors are logged with slog and return 500 with a JSON error body.
 func Register(mux *http.ServeMux, cfg config.Config, store artifact.Store, raw http.Handler) {
 	mux.Handle("GET /{$}", landing(cfg, store))
 	mux.Handle("GET /a/{id}", view(cfg, store, raw))
@@ -144,7 +145,7 @@ func landing(cfg config.Config, store artifact.Store) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		if !authorized(r, cfg.Token) {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Artitrove", charset="UTF-8"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		list, err := store.List(r.Context())
@@ -193,5 +194,13 @@ func staticFiles() http.Handler {
 
 func serverError(w http.ResponseWriter, msg string, err error) {
 	slog.Error(msg, "error", err)
-	http.Error(w, "internal server error", http.StatusInternalServerError)
+	writeError(w, http.StatusInternalServerError, "internal server error")
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		slog.Error("write response", "error", err)
+	}
 }
