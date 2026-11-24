@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -66,14 +67,10 @@ func TestReadDeadlines(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	cfg := config.Config{Token: "test-token-0123456789abcdef", BaseURL: "http://x", MaxSize: 1 << 20}
-	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() { _ = serve(t.Context(), ln, newHandler(cfg, st)) }()
+	addr := serveForTest(t, newHandler(cfg, st))
 
 	dial := func() net.Conn {
-		c, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", ln.Addr().String())
+		c, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,5 +100,49 @@ func TestReadDeadlines(t *testing.T) {
 	status, err := bufio.NewReader(c).ReadString('\n')
 	if err != nil || !strings.HasPrefix(status, "HTTP/1.1 201") {
 		t.Fatalf("slow authenticated upload: %q, %v", status, err)
+	}
+}
+
+// serveForTest serves h on a free loopback port until the test ends, and waits for serve to
+// return before the test's earlier cleanups run.
+func serveForTest(t *testing.T, h http.Handler) string {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := make(chan error, 1)
+	go func() { served <- serve(ctx, ln, h) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-served; err != nil {
+			t.Errorf("serve: %v", err)
+		}
+	})
+	return ln.Addr().String()
+}
+
+func TestReadDeadlineLeavesBodylessRequestContext(t *testing.T) {
+	defaultReadTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { defaultReadTimeout = 30 * time.Second })
+	addr := serveForTest(t, securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(3 * defaultReadTimeout)
+		if err := r.Context().Err(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})))
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("slow bodyless response: %d %s", resp.StatusCode, body)
 	}
 }

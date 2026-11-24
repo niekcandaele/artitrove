@@ -15,9 +15,12 @@ var defaultReadTimeout = 30 * time.Second
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Unauthenticated clients must not hold a connection by never sending the declared body.
-		// An authenticated upload extends this deadline.
-		if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
-			slog.Error("set read deadline", "error", err)
+		// An authenticated upload extends this deadline. Bodyless requests are left alone: there
+		// the deadline would hit net/http's background read and cancel a slow response's context.
+		if r.ContentLength != 0 {
+			if err := http.NewResponseController(w).SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				slog.Error("set read deadline", "error", err)
+			}
 		}
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
