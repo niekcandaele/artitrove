@@ -1,0 +1,19 @@
+{{define "servererror"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Something went wrong</title>
+{{template "assets"}}
+</head>
+<body class="page">
+{{template "slim-header"}}
+<main class="reading">
+<h1>Something went wrong</h1>
+<p>This artifact could not be loaded. Try again; if it keeps happening, check the server logs.</p>
+<p><a href="/">Go to Artitrove</a></p>
+</main>
+</body>
+</html>
+{{end}}

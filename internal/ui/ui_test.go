@@ -261,7 +261,7 @@ func TestRenderArtifactKinds(t *testing.T) {
 					t.Errorf("unexpected %q", n)
 				}
 			}
-			if c.kind == render.KindHTML && !regexp.MustCompile(`</header>\s*<iframe`).MatchString(body) {
+			if c.kind == render.KindHTML && !regexp.MustCompile(`</header>\s*<main>\s*<iframe`).MatchString(body) {
 				t.Error("iframe must directly follow the header")
 			}
 			if c.kind == render.KindMarkdown && strings.Index(body, "highlight.css") > strings.Index(body, "app.css") {

@@ -460,8 +460,8 @@ func TestServerErrorOnStoreFailure(t *testing.T) {
 	if _, err := st.Get(context.Background(), id); err == nil || errors.Is(err, artifact.ErrNotFound) {
 		t.Fatalf("closed store error = %v", err)
 	}
-	if rec, _ := e.page("/a/" + id); rec.Code != 500 {
-		t.Errorf("view: %d", rec.Code)
+	if rec, body := e.page("/a/" + id); rec.Code != 500 || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") || !strings.Contains(body, "Something went wrong") {
+		t.Errorf("view: %d %v", rec.Code, rec.Header())
 	}
 	rec := e.do("GET", "/", map[string]string{"Authorization": "Basic " + basic("u", token)})
 	if rec.Code != 500 || rec.Header().Get("Content-Type") != "application/json" ||
@@ -478,5 +478,18 @@ func TestSecurityHeadersOnPages(t *testing.T) {
 		if got := e.do("GET", p, accHTML).Header().Get("Content-Security-Policy"); got != ui.PageCSP {
 			t.Errorf("%s: CSP %q", p, got)
 		}
+	}
+}
+
+func TestLargeTextIsCutAtRuneBoundary(t *testing.T) {
+	e := newEnv(t, false)
+	id := e.create("T", "text/plain", strings.Repeat("é", maxTextPreview))
+	rec, body := e.page("/a/" + id)
+	if rec.Code != 200 || !strings.Contains(body, `class="note"`) || strings.Contains(body, "�") || len(body) > maxTextPreview+4096 {
+		t.Errorf("large text: %d, %d bytes", rec.Code, len(body))
+	}
+	id = e.create("T", "text/plain", "short")
+	if _, body := e.page("/a/" + id); strings.Contains(body, `class="note"`) {
+		t.Error("note on a small file")
 	}
 }

@@ -2,11 +2,14 @@
   "use strict";
   var canCopy = navigator.clipboard && window.isSecureContext;
 
+  var status = document.querySelector(".sr[role=status]");
+
   function flash(btn, el, text) {
     var old = el.textContent;
     el.textContent = text;
+    status.textContent = text;
     btn.classList.add("flash");
-    setTimeout(function () { el.textContent = old; btn.classList.remove("flash"); }, 1400);
+    setTimeout(function () { el.textContent = old; status.textContent = ""; btn.classList.remove("flash"); }, 1400);
   }
 
   var share = document.querySelector("details.share");
@@ -14,6 +17,7 @@
     var summary = share.querySelector("summary");
     var input = share.querySelector("input");
     summary.addEventListener("click", function (e) {
+      if (canCopy && share.open) { return; }
       if (!canCopy) {
         setTimeout(function () { if (share.open) { input.focus(); input.select(); } });
         return;

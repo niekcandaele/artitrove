@@ -77,6 +77,7 @@ type ArtifactPage struct {
 	Kind              render.Kind   // effective kind: web passes KindText for invalid JSON
 	Body              template.HTML // render.Markdown or render.JSON fragment; otherwise empty
 	Text              string        // KindText content; web applies strings.ToValidUTF8
+	Truncated         bool          // Text is only the start of the file
 }
 
 // IndexEntry is one row of the landing-page index.
@@ -114,6 +115,12 @@ func RenderLanding(w http.ResponseWriter, p LandingPage) error {
 // behaviour as RenderArtifact.
 func RenderNotFound(w http.ResponseWriter) error {
 	return execute(w, "notfound", http.StatusNotFound, nil)
+}
+
+// RenderServerError renders the internal-error page with status 500, with the same header and
+// error behaviour as RenderArtifact.
+func RenderServerError(w http.ResponseWriter) error {
+	return execute(w, "servererror", http.StatusInternalServerError, nil)
 }
 
 func execute(w http.ResponseWriter, name string, status int, data any) error {

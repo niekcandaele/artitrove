@@ -15,19 +15,23 @@
 <h1><bdi>{{or .Title .ID}}</bdi></h1>
 <div class="meta"><span class="type type-{{.Kind}}"><bdi>{{.ContentType}}</bdi></span><span>{{size .Size}}</span><time datetime="{{rfc3339 .CreatedAt}}">{{when .CreatedAt}}</time></div>
 </div>
+<span class="sr" role="status"></span>
 <div class="actions">
 <a class="btn" href="/a/{{.ID}}/raw">{{template "icon-raw"}}<span class="txt">{{if eq .Kind "html"}}Open full page{{else}}Open raw{{end}}</span></a>
 <details class="share"><summary class="btn primary" data-url="{{.URL}}">{{template "icon-link"}}<span class="txt">Copy link</span></summary>
 <div class="share-box"><input type="text" readonly value="{{.URL}}" aria-label="Link to this artifact"></div></details>
 </div>
 </header>
+<main>
 {{if eq .Kind "html"}}<iframe sandbox="allow-scripts" src="/a/{{.ID}}/raw" title="{{or .Title .ID}}"></iframe>
 {{else if eq .Kind "markdown"}}<article class="reading">{{.Body}}</article>
 {{else if eq .Kind "json"}}<div class="json-view">{{.Body}}</div>
-{{else if eq .Kind "text"}}<pre class="text">
+{{else if eq .Kind "text"}}{{if .Truncated}}<p class="note">Showing the start of this file. <a href="/a/{{.ID}}/raw">Open raw</a> for all of it.</p>
+{{end}}<pre class="text">
 {{.Text}}</pre>
 {{else}}<div class="reading file"><p class="meta"><bdi>{{.ContentType}}</bdi><span>{{size .Size}}</span></p><p>This file type has no preview.</p><a class="btn primary" href="/a/{{.ID}}/raw" download="{{or .Title .ID}}">Download</a></div>
-{{end}}{{if ne .Kind "html"}}<p class="foot">Agents: fetch <code>/a/{{.ID}}/raw</code> for the original file.</p>
+{{end}}</main>
+{{if ne .Kind "html"}}<p class="foot">Agents: fetch <code>/a/{{.ID}}/raw</code> for the original file.</p>
 {{end}}</body>
 </html>
 {{end}}
