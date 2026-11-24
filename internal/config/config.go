@@ -2,6 +2,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/url"
@@ -107,4 +109,10 @@ func (c Config) ArtifactURL(id string) string {
 // RawURL returns the raw-bytes link for id: BaseURL + "/a/" + id + "/raw".
 func (c Config) RawURL(id string) string {
 	return c.ArtifactURL(id) + "/raw"
+}
+
+// TokenMatches compares a presented token with the configured one in constant time.
+func TokenMatches(given, token string) bool {
+	g, t := sha256.Sum256([]byte(given)), sha256.Sum256([]byte(token))
+	return subtle.ConstantTimeCompare(g[:], t[:]) == 1
 }

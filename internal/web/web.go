@@ -2,8 +2,6 @@
 package web
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -166,8 +164,7 @@ func landing(cfg config.Config, store artifact.Store) http.Handler {
 
 func authorized(r *http.Request, token string) bool {
 	_, pass, ok := r.BasicAuth()
-	got, want := sha256.Sum256([]byte(pass)), sha256.Sum256([]byte(token))
-	return ok && subtle.ConstantTimeCompare(got[:], want[:]) == 1
+	return ok && config.TokenMatches(pass, token)
 }
 
 func highlightCSS() http.Handler {

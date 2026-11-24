@@ -2,8 +2,6 @@
 package api
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -146,12 +144,10 @@ func newResponse(cfg config.Config, a artifact.Artifact) response {
 }
 
 func requireToken(token string, next http.HandlerFunc) http.HandlerFunc {
-	want := sha256.Sum256([]byte(token))
 	return func(w http.ResponseWriter, r *http.Request) {
 		scheme, given, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 		ok = ok && strings.EqualFold(scheme, "Bearer") // auth schemes are case-insensitive (RFC 9110 §11.1)
-		got := sha256.Sum256([]byte(given))
-		if !ok || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
+		if !ok || !config.TokenMatches(given, token) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, http.StatusUnauthorized, "missing or invalid bearer token")
 			return

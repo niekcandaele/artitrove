@@ -202,3 +202,14 @@ func TestLoadJoinsAllErrors(t *testing.T) {
 		t.Errorf("error leaks token: %v", err)
 	}
 }
+
+func TestTokenMatches(t *testing.T) {
+	if !TokenMatches("secret-token-1234", "secret-token-1234") {
+		t.Error("equal tokens must match")
+	}
+	for _, given := range []string{"", "secret-token-1234 ", "other"} {
+		if TokenMatches(given, "secret-token-1234") {
+			t.Errorf("%q must not match", given)
+		}
+	}
+}
