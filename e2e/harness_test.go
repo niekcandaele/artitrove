@@ -46,10 +46,6 @@ func runTests(m *testing.M) int {
 		return 1
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	if err := touchSources(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
 	binPath = filepath.Join(dir, "artitrove")
 	build := exec.CommandContext(context.Background(), "go", "build", "-trimpath", "-o", binPath, "./cmd/artitrove") //nolint:gosec // binPath is a temp path
 	build.Dir = ".."
@@ -61,9 +57,17 @@ func runTests(m *testing.M) int {
 	return m.Run()
 }
 
-// touchSources reads every app source file. This package imports no app code, so the reads are
-// what make `go test` invalidate its cached result when the app changes.
-func touchSources() error {
+// TestSourcesTracked reads every app source file. This package imports no app code, so the reads
+// are what make `go test` invalidate its cached result when the app changes. They must happen
+// inside m.Run: reads made earlier in TestMain are not recorded for the cache.
+func TestSourcesTracked(t *testing.T) {
+	t.Parallel()
+	if err := readSources(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readSources() error {
 	for _, root := range []string{"../cmd", "../internal", "../go.mod", "../go.sum"} {
 		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -112,7 +116,7 @@ type server struct {
 }
 
 // envFor returns the process environment: no inherited ARTITROVE_* variables, test defaults,
-// then overrides given as KEY=VALUE.
+// then overrides given as KEY=VALUE, or as a bare KEY to leave that variable unset.
 func envFor(dataDir string, overrides ...string) []string {
 	vars := map[string]string{
 		"ARTITROVE_TOKEN":    testToken,
@@ -121,8 +125,12 @@ func envFor(dataDir string, overrides ...string) []string {
 		"ARTITROVE_BASE_URL": baseURL,
 	}
 	for _, o := range overrides {
-		k, v, _ := strings.Cut(o, "=")
-		vars[k] = v
+		k, v, set := strings.Cut(o, "=")
+		if set {
+			vars[k] = v
+		} else {
+			delete(vars, k)
+		}
 	}
 	var env []string
 	for _, kv := range os.Environ() {
@@ -136,11 +144,13 @@ func envFor(dataDir string, overrides ...string) []string {
 	return env
 }
 
-// launch starts the binary without waiting for it to listen.
+// launch starts the binary without waiting for it to listen. Its working directory is a fresh
+// temp directory, so a relative default such as ./data stays inside it.
 func launch(t *testing.T, dataDir string, overrides ...string) *server {
 	t.Helper()
 	s := &server{dataDir: dataDir, stderr: &syncBuffer{}, exited: make(chan struct{})}
 	s.cmd = exec.CommandContext(context.Background(), binPath) //nolint:gosec // runs the binary this test just built
+	s.cmd.Dir = t.TempDir()
 	s.cmd.Env = envFor(dataDir, overrides...)
 	s.cmd.Stderr = s.stderr
 	if err := s.cmd.Start(); err != nil {
@@ -461,8 +471,8 @@ func assertSafeURLs(t *testing.T, page string) {
 
 var (
 	scriptTagRe = regexp.MustCompile(`(?i)<script\b[^>]*>`)
-	tagStyleRe  = regexp.MustCompile(`(?i)<[^>]*\sstyle\s*=`)
-	tagEventRe  = regexp.MustCompile(`(?i)<[^>]*\son[a-z]+\s*=`)
+	tagStyleRe  = regexp.MustCompile(`(?i)<[^>]*[\s"'/]style\s*=`)
+	tagEventRe  = regexp.MustCompile(`(?i)<[^>]*[\s"'/]on[a-z]+\s*=`)
 )
 
 // assertCSPCompliant fails on markup the page CSP would block: inline script or style, event handlers.

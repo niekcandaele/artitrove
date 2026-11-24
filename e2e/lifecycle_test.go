@@ -96,6 +96,34 @@ func TestDataDirCreated(t *testing.T) {
 	}
 }
 
+func TestDefaultBaseURLAndDataDir(t *testing.T) {
+	t.Parallel()
+	s := start(t, "", "ARTITROVE_BASE_URL", "ARTITROVE_DATA_DIR")
+	a := s.upload(t, []byte("x"), "text/plain", "")
+	eq(t, "url", a.URL, "http://localhost:8080/a/"+a.ID)
+	eq(t, "raw_url", a.RawURL, "http://localhost:8080/a/"+a.ID+"/raw")
+	if _, err := os.Stat(filepath.Join(s.cmd.Dir, "data", "blobs", a.ID)); err != nil {
+		t.Error(err)
+	}
+}
+
+// waitRefused waits until addr stops accepting connections, which shows shutdown has begun.
+func waitRefused(t *testing.T, addr string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		c, err := (&net.Dialer{Timeout: time.Second}).DialContext(t.Context(), "tcp", addr)
+		if err != nil {
+			return
+		}
+		_ = c.Close()
+		if time.Now().After(deadline) {
+			t.Fatal("listener still accepts connections after the shutdown signal")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestGracefulShutdown(t *testing.T) {
 	t.Parallel()
 	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGINT} {
@@ -132,7 +160,7 @@ func TestGracefulShutdown(t *testing.T) {
 			if err := s.cmd.Process.Signal(sig); err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(200 * time.Millisecond)
+			waitRefused(t, s.addr)
 			if _, err := c.Write(body[1024:]); err != nil {
 				t.Fatal(err)
 			}
@@ -154,13 +182,14 @@ func TestGracefulShutdown(t *testing.T) {
 
 func TestStartupFailsWithoutValidToken(t *testing.T) {
 	t.Parallel()
-	for name, token := range map[string]string{
-		"unset":         "",
-		"15 ascii":      strings.Repeat("a", 15),
-		"15 multi-byte": strings.Repeat("é", 15),
+	for name, override := range map[string]string{
+		"unset":         "ARTITROVE_TOKEN",
+		"empty":         "ARTITROVE_TOKEN=",
+		"15 ascii":      "ARTITROVE_TOKEN=" + strings.Repeat("a", 15),
+		"15 multi-byte": "ARTITROVE_TOKEN=" + strings.Repeat("é", 15),
 	} {
 		t.Run("rejected/"+name, func(t *testing.T) {
-			s := launch(t, t.TempDir(), "ARTITROVE_TOKEN="+token)
+			s := launch(t, t.TempDir(), override)
 			if code := s.exitCode(t); code == 0 {
 				t.Error("exit code 0, want non-zero")
 			}

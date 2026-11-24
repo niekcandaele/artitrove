@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIndexOff(t *testing.T) {
@@ -73,8 +74,11 @@ func TestIndexListing(t *testing.T) {
 	if ids := indexIDs(t, s); len(ids) != 0 {
 		t.Errorf("empty store lists %v", ids)
 	}
+	// created_at has whole-second precision; the pauses make newest-first independent of tie-breaking.
 	a := s.upload(t, []byte("a"), "text/plain", "alpha")
+	time.Sleep(1100 * time.Millisecond)
 	b := s.upload(t, []byte("# b"), "text/markdown", "bravo")
+	time.Sleep(1100 * time.Millisecond)
 	c := s.upload(t, []byte("{}"), "application/json", "")
 	want := []string{c.ID, b.ID, a.ID}
 	if got := indexIDs(t, s); strings.Join(got, ",") != strings.Join(want, ",") {

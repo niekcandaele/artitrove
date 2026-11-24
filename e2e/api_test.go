@@ -130,23 +130,32 @@ func TestUploadConcurrent(t *testing.T) {
 	t.Parallel()
 	s := newServer(t)
 	const n = 10
-	ids := make([]string, n)
+	replies := make([]reply, n)
+	bodies := make([][]byte, n)
+	errs := make([]error, n)
 	var wg sync.WaitGroup
 	for i := range n {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			ids[i] = s.upload(t, fmt.Appendf(nil, "body number %d", i), "text/plain", "").ID
-		}()
+		wg.Go(func() {
+			replies[i], bodies[i], errs[i] = s.tryDo(t, http.MethodPost, "/api/artifacts",
+				strings.NewReader(fmt.Sprintf("body number %d", i)), append(bearer(), "Content-Type", "text/plain")...)
+		})
 	}
 	wg.Wait()
 	seen := map[string]bool{}
-	for i, id := range ids {
-		if seen[id] {
-			t.Errorf("duplicate id %s", id)
+	for i := range n {
+		if errs[i] != nil {
+			t.Fatal(errs[i])
 		}
-		seen[id] = true
-		_, b := s.get(t, "/a/"+id+"/raw")
+		if replies[i].StatusCode != http.StatusCreated {
+			t.Fatalf("upload %d status = %d, body %s", i, replies[i].StatusCode, bodies[i])
+		}
+		var a artifactJSON
+		decode(t, bodies[i], &a)
+		if seen[a.ID] {
+			t.Errorf("duplicate id %s", a.ID)
+		}
+		seen[a.ID] = true
+		_, b := s.get(t, "/a/"+a.ID+"/raw")
 		eq(t, "raw body", string(b), fmt.Sprintf("body number %d", i))
 	}
 }
@@ -387,32 +396,35 @@ func TestCommonHeadersEverywhere(t *testing.T) {
 		name, method, path string
 		body               string
 		hdr                []string
+		status             int
 	}{
-		{"healthz", "GET", "/healthz", "", nil},
-		{"landing", "GET", "/", "", idx},
-		{"landing 401", "GET", "/", "", nil},
-		{"app.css", "GET", "/static/app.css", "", nil},
-		{"app.js", "GET", "/static/app.js", "", nil},
-		{"highlight.css", "GET", "/static/highlight.css", "", nil},
-		{"static 404", "GET", "/static/nope.css", "", nil},
-		{"upload 201", "POST", "/api/artifacts", "x", hdrPost},
-		{"upload 400", "POST", "/api/artifacts", "", hdrPost},
-		{"upload 401", "POST", "/api/artifacts", "x", nil},
-		{"upload 413", "POST", "/api/artifacts", strings.Repeat("a", 1025), hdrPost},
-		{"metadata 200", "GET", "/api/artifacts/" + a.ID, "", nil},
-		{"metadata 404", "GET", "/api/artifacts/" + unknown, "", nil},
-		{"raw 200", "GET", "/a/" + a.ID + "/raw", "", nil},
-		{"raw 404", "GET", "/a/" + unknown + "/raw", "", nil},
-		{"view 200", "GET", "/a/" + a.ID, "", []string{"Accept", "text/html"}},
-		{"view 404", "GET", "/a/" + unknown, "", []string{"Accept", "text/html"}},
-		{"view as raw", "GET", "/a/" + a.ID, "", nil},
-		{"delete 204", "DELETE", "/api/artifacts/" + gone.ID, "", bearer()},
-		{"mux 404", "GET", "/nope", "", nil},
-		{"mux 405", "PUT", "/api/artifacts/x", "", nil},
+		{"healthz", "GET", "/healthz", "", nil, 200},
+		{"landing", "GET", "/", "", idx, 200},
+		{"landing 401", "GET", "/", "", nil, 401},
+		{"app.css", "GET", "/static/app.css", "", nil, 200},
+		{"app.js", "GET", "/static/app.js", "", nil, 200},
+		{"highlight.css", "GET", "/static/highlight.css", "", nil, 200},
+		{"static 404", "GET", "/static/nope.css", "", nil, 404},
+		{"static dir 404", "GET", "/static/", "", nil, 404},
+		{"upload 201", "POST", "/api/artifacts", "x", hdrPost, 201},
+		{"upload 400", "POST", "/api/artifacts", "", hdrPost, 400},
+		{"upload 401", "POST", "/api/artifacts", "x", nil, 401},
+		{"upload 413", "POST", "/api/artifacts", strings.Repeat("a", 1025), hdrPost, 413},
+		{"metadata 200", "GET", "/api/artifacts/" + a.ID, "", nil, 200},
+		{"metadata 404", "GET", "/api/artifacts/" + unknown, "", nil, 404},
+		{"raw 200", "GET", "/a/" + a.ID + "/raw", "", nil, 200},
+		{"raw 404", "GET", "/a/" + unknown + "/raw", "", nil, 404},
+		{"view 200", "GET", "/a/" + a.ID, "", []string{"Accept", "text/html"}, 200},
+		{"view 404", "GET", "/a/" + unknown, "", []string{"Accept", "text/html"}, 404},
+		{"view as raw", "GET", "/a/" + a.ID, "", nil, 200},
+		{"delete 204", "DELETE", "/api/artifacts/" + gone.ID, "", bearer(), 204},
+		{"mux 404", "GET", "/nope", "", nil, 404},
+		{"mux 405", "PUT", "/api/artifacts/x", "", nil, 405},
 	}
 	for _, r := range requests {
 		t.Run(r.name, func(t *testing.T) {
 			resp, _ := s.do(t, r.method, r.path, strings.NewReader(r.body), r.hdr...)
+			eq(t, "status", resp.StatusCode, r.status)
 			assertCommonHeaders(t, resp)
 		})
 	}

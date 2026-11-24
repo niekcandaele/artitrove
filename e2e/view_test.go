@@ -51,12 +51,11 @@ func TestNegotiation(t *testing.T) {
 	}
 
 	for name, accept := range map[string][]string{
-		"no accept":     nil,
-		"star":          {"*/*"},
-		"json":          {"application/json"},
-		"zero quality":  {"text/html;q=0"},
-		"xhtml":         {"application/xhtml+xml"},
-		"text wildcard": {"text/*"}, // spec leaves text/* open; the app treats only text/html as asking for HTML
+		"no accept":    nil,
+		"star":         {"*/*"},
+		"json":         {"application/json"},
+		"zero quality": {"text/html;q=0"},
+		"xhtml":        {"application/xhtml+xml"},
 	} {
 		t.Run("raw/"+name, func(t *testing.T) {
 			var hdr []string
@@ -88,15 +87,18 @@ func TestNegotiation(t *testing.T) {
 func TestViewHTML(t *testing.T) {
 	t.Parallel()
 	s := newServer(t)
-	a := s.upload(t, []byte("<script>window.pwned=1</script><p>x</p>"), "text/html", "")
-	for _, accept := range []string{"text/html", "TEXT/HTML; Charset=UTF-8"} {
-		page := htmlView(t, s, a.ID, accept)
-		contains(t, "iframe", page, `<iframe sandbox="allow-scripts" src="/a/`+a.ID+`/raw"`)
-		lacks(t, "page", page, "allow-same-origin")
-		lacks(t, "page", page, "window.pwned")
+	body := []byte("<script>window.pwned=1</script><p>x</p>")
+	for _, ctype := range []string{"text/html", "TEXT/HTML; Charset=UTF-8"} {
+		a := s.upload(t, body, ctype, "")
+		for _, accept := range []string{"text/html", "TEXT/HTML; Charset=UTF-8"} {
+			page := htmlView(t, s, a.ID, accept)
+			contains(t, ctype+" iframe", page, `<iframe sandbox="allow-scripts" src="/a/`+a.ID+`/raw"`)
+			lacks(t, ctype, page, "allow-same-origin")
+			lacks(t, ctype, page, "window.pwned")
+		}
+		resp, b := s.get(t, "/a/"+a.ID+"/raw")
+		assertRaw(t, resp, b, body, a)
 	}
-	resp, b := s.get(t, "/a/"+a.ID+"/raw")
-	assertRaw(t, resp, b, []byte("<script>window.pwned=1</script><p>x</p>"), a)
 }
 
 func TestViewHeader(t *testing.T) {
@@ -126,7 +128,9 @@ func TestViewMarkdown(t *testing.T) {
 		"![x](https://evil.test/p.png)\n\n![y](//evil.test/p.png)\n\n" +
 		"<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n" +
 		"[a](javascript:alert(1)) [b](JaVaScRiPt:alert(1)) [c](vbscript:x) [d](data:text/html,x)\n\n" +
-		"[e](&#106;avascript:alert(1)) [f](java&#x09;script:alert(1))\n\n<javascript:alert(1)>\n"
+		"[e](&#106;avascript:alert(1)) [f](java&#x09;script:alert(1))\n\n<javascript:alert(1)>\n\n" +
+		"![j](javascript:alert(1)) ![k](data:image/svg+xml,x)\n\n" +
+		"| l | c | r |\n|:--|:-:|--:|\n| 1 | 2 | 3 |\n"
 	for _, ctype := range []string{"text/markdown", "text/markdown; charset=utf-8"} {
 		a := s.upload(t, []byte(src), ctype, "")
 		page := htmlView(t, s, a.ID)
@@ -222,6 +226,16 @@ func TestHostileTitle(t *testing.T) {
 	contains(t, "view h1", page, "&lt;img src=x onerror=alert(1)&gt;")
 	assertCSPCompliant(t, page)
 
+	hostileType := `text/plain; x="<img src=x onerror=alert(1)>"`
+	typed := s.upload(t, []byte("x"), hostileType, "")
+	eq(t, "hostile content_type", typed.ContentType, hostileType)
+	bin := s.upload(t, []byte{0}, `application/octet-stream; x="<img src=x onerror=alert(1)>"`, "")
+	for _, id := range []string{typed.ID, bin.ID} {
+		page := htmlView(t, s, id)
+		lacks(t, "hostile type view", page, "<img src=x")
+		assertCSPCompliant(t, page)
+	}
+
 	resp, b := s.get(t, "/", basic("", testToken)...)
 	assertPage(t, resp, http.StatusOK)
 	lacks(t, "index", string(b), "<img src=x")
@@ -239,7 +253,11 @@ var (
 func TestNoExternalRequests(t *testing.T) {
 	t.Parallel()
 	s := newServer(t, "ARTITROVE_INDEX=true")
-	pages := map[string]string{}
+	type page struct {
+		srv  *server
+		html string
+	}
+	pages := map[string]page{}
 	for ctype, body := range map[string]string{
 		"text/html":                "<p>x</p>",
 		"text/markdown":            "# hi\n\n```go\nx := 1\n```\n\n![i](/static/favicon.svg)\n\n[ext](https://example.com)\n",
@@ -247,21 +265,21 @@ func TestNoExternalRequests(t *testing.T) {
 		"text/plain":               "plain",
 		"application/octet-stream": "\x00\x01",
 	} {
-		pages["view "+ctype] = htmlView(t, s, s.upload(t, []byte(body), ctype, "t").ID)
+		pages["view "+ctype] = page{s, htmlView(t, s, s.upload(t, []byte(body), ctype, "t").ID)}
 	}
 	resp, b := s.get(t, "/", basic("", testToken)...)
 	assertPage(t, resp, http.StatusOK)
-	pages["index on"] = string(b)
+	pages["index on"] = page{s, string(b)}
 	resp, b = s.get(t, "/a/"+unknownID, "Accept", "text/html")
 	assertPage(t, resp, http.StatusNotFound)
-	pages["not found"] = string(b)
+	pages["not found"] = page{s, string(b)}
 
 	off := newServer(t)
 	resp, b = off.get(t, "/")
 	assertPage(t, resp, http.StatusOK)
-	pages["index off"] = string(b)
+	pages["index off"] = page{off, string(b)}
 
-	fetch := func(ref string) {
+	fetch := func(srv *server, ref string) {
 		t.Helper()
 		if !strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, "//") {
 			t.Errorf("non-local reference %q", ref)
@@ -271,16 +289,16 @@ func TestNoExternalRequests(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp, _ := s.get(t, p.RequestURI())
+		resp, _ := srv.get(t, p.RequestURI())
 		eq(t, "GET "+ref, resp.StatusCode, http.StatusOK)
 		assertCommonHeaders(t, resp)
 	}
-	for name, page := range pages {
+	for name, pg := range pages {
 		t.Run(name, func(t *testing.T) {
-			assertCSPCompliant(t, page)
+			assertCSPCompliant(t, pg.html)
 			for _, re := range []*regexp.Regexp{linkHrefRe, srcRe} {
-				for _, m := range re.FindAllStringSubmatch(page, -1) {
-					fetch(html.UnescapeString(m[1]))
+				for _, m := range re.FindAllStringSubmatch(pg.html, -1) {
+					fetch(pg.srv, html.UnescapeString(m[1]))
 				}
 			}
 		})
@@ -292,7 +310,7 @@ func TestNoExternalRequests(t *testing.T) {
 		if !strings.Contains(ref, ":") && !strings.HasPrefix(ref, "/") {
 			ref = path.Join("/static", ref)
 		}
-		fetch(ref)
+		fetch(s, ref)
 	}
 	_, js := s.get(t, "/static/app.js")
 	if m := jsExtRe.FindString(string(js)); m != "" {
