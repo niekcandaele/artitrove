@@ -29,13 +29,40 @@
 package ui
 
 import (
+	"bytes"
+	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/niekcandaele/artitrove/internal/artifact"
 	"github.com/niekcandaele/artitrove/internal/render"
 )
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+//go:embed static
+var staticFS embed.FS
+
+var static = mustSub(staticFS, "static")
+
+var pages = template.Must(template.New("").Funcs(template.FuncMap{
+	"size":    humanSize,
+	"rfc3339": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+	"when":    func(t time.Time) string { return t.UTC().Format("2 Jan 2006, 15:04 UTC") },
+}).ParseFS(templateFS, "templates/*.html"))
+
+func mustSub(fsys fs.FS, dir string) fs.FS {
+	sub, err := fs.Sub(fsys, dir)
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}
 
 // PageCSP is the Content-Security-Policy for every app page.
 const PageCSP = "default-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'"
@@ -67,7 +94,7 @@ type LandingPage struct {
 
 // Static returns the embedded static files, rooted so that "app.css" is served at StaticPath+"app.css".
 func Static() fs.FS {
-	panic("not implemented")
+	return static
 }
 
 // RenderArtifact executes the artifact template into a buffer. On success it sets
@@ -75,16 +102,48 @@ func Static() fs.FS {
 // 200 and then the body. On error it writes nothing, so the caller can still send a 500.
 // Callers may set other headers (Vary, Cache-Control) before calling.
 func RenderArtifact(w http.ResponseWriter, p ArtifactPage) error {
-	panic("not implemented")
+	return execute(w, "artifact", http.StatusOK, p)
 }
 
 // RenderLanding renders the landing page, with the same header and error behaviour as RenderArtifact.
 func RenderLanding(w http.ResponseWriter, p LandingPage) error {
-	panic("not implemented")
+	return execute(w, "landing", http.StatusOK, p)
 }
 
 // RenderNotFound renders the not-found page with status 404, with the same header and error
 // behaviour as RenderArtifact.
 func RenderNotFound(w http.ResponseWriter) error {
-	panic("not implemented")
+	return execute(w, "notfound", http.StatusNotFound, nil)
+}
+
+func execute(w http.ResponseWriter, name string, status int, data any) error {
+	var buf bytes.Buffer
+	if err := pages.ExecuteTemplate(&buf, name, data); err != nil {
+		return fmt.Errorf("render %s page: %w", name, err)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", PageCSP)
+	w.WriteHeader(status)
+	if _, err := buf.WriteTo(w); err != nil {
+		return fmt.Errorf("write %s page: %w", name, err)
+	}
+	return nil
+}
+
+// humanSize formats a byte count with SI units, one decimal below 10.
+func humanSize(n int64) string {
+	if n < 1000 {
+		return strconv.FormatInt(n, 10) + " B"
+	}
+	units := []string{"kB", "MB", "GB", "TB"}
+	v := float64(n) / 1000
+	i := 0
+	for v >= 999.5 && i < len(units)-1 {
+		v /= 1000
+		i++
+	}
+	if v < 9.95 {
+		return strconv.FormatFloat(v, 'f', 1, 64) + " " + units[i]
+	}
+	return strconv.FormatFloat(v, 'f', 0, 64) + " " + units[i]
 }
