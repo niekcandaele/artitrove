@@ -22,7 +22,6 @@ var textApplicationTypes = map[string]bool{
 	"application/typescript":    true,
 	"application/x-typescript":  true,
 	"application/x-python":      true,
-	"application/x-python-code": true,
 	"application/x-php":         true,
 	"application/x-httpd-php":   true,
 	"application/x-perl":        true,
@@ -37,7 +36,8 @@ var textApplicationTypes = map[string]bool{
 //	text/markdown, text/x-markdown                   -> KindMarkdown
 //	application/json, application/*+json             -> KindJSON
 //	text/*, application/{javascript,x-javascript,ecmascript,xml,yaml,x-yaml,toml,x-sh,
-//	  x-shellscript,sql,graphql,x-ndjson,typescript,x-typescript,x-python,
+//	  x-shellscript,sql,graphql,x-ndjson,typescript,x-typescript,x-python,x-php,x-httpd-php,
+//	  x-perl,x-ruby}, application/*+xml -> KindText
 //	everything else (image/* including svg+xml, octet-stream, pdf) -> KindBinary
 func Detect(contentType string) Kind {
 	mt, _, err := mime.ParseMediaType(contentType)

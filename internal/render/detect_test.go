@@ -19,6 +19,7 @@ func TestDetect(t *testing.T) {
 		},
 		KindBinary: {
 			"image/svg+xml", "image/png", "application/octet-stream", "application/pdf",
+			"application/x-python-code",
 			"", "garbage", "/",
 		},
 	}
