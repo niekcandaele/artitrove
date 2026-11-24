@@ -27,7 +27,7 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(c.method, c.path, nil))
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), c.method, c.path, nil))
 		if rec.Code != c.status {
 			t.Errorf("%s %s: status %d, want %d", c.method, c.path, rec.Code, c.status)
 		}
@@ -43,7 +43,7 @@ func TestSecurityHeaders(t *testing.T) {
 		}
 	}
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/ok", nil))
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ok", nil))
 	if got := rec.Header().Get("Content-Type"); got != "text/x-test" {
 		t.Errorf("handler Content-Type lost: %q", got)
 	}

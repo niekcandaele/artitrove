@@ -30,7 +30,7 @@ func main() {
 	os.Exit(code)
 }
 
-func run(ctx context.Context, args []string, getenv func(string) string) int {
+func run(ctx context.Context, args []string, getenv func(string) string) (code int) {
 	if len(args) > 1 || (len(args) == 1 && args[0] != "healthcheck") {
 		fmt.Fprintln(os.Stderr, "usage: artitrove [healthcheck]")
 		return 2
@@ -52,13 +52,19 @@ func run(ctx context.Context, args []string, getenv func(string) string) int {
 		slog.Error("open store", "error", err)
 		return 1
 	}
-	defer st.Close()
-	ln, err := net.Listen("tcp", cfg.Listen)
+	defer func() {
+		if err := st.Close(); err != nil {
+			slog.Error("close store", "error", err)
+			code = 1
+		}
+	}()
+	h := newHandler(cfg, st)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		slog.Error("listen", "error", err)
 		return 1
 	}
-	if err := serve(ctx, ln, newHandler(cfg, st)); err != nil {
+	if err := serve(ctx, ln, h); err != nil {
 		slog.Error("serve", "error", err)
 		return 1
 	}

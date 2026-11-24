@@ -9,7 +9,7 @@ import (
 )
 
 func TestServeGracefulShutdown(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,12 +29,17 @@ func TestServeGracefulShutdown(t *testing.T) {
 	}
 	resp := make(chan result, 1)
 	go func() {
-		r, err := http.Get("http://" + ln.Addr().String())
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+ln.Addr().String(), nil)
 		if err != nil {
 			resp <- result{err: err}
 			return
 		}
-		r.Body.Close()
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		_ = r.Body.Close()
 		resp <- result{code: r.StatusCode}
 	}()
 
@@ -53,8 +58,8 @@ func TestServeGracefulShutdown(t *testing.T) {
 	if err := <-served; err != nil {
 		t.Fatalf("serve: %v", err)
 	}
-	if c, err := net.Dial("tcp", ln.Addr().String()); err == nil {
-		c.Close()
+	if c, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", ln.Addr().String()); err == nil {
+		_ = c.Close()
 		t.Error("listener still accepting after shutdown")
 	}
 }
