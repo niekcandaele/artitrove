@@ -472,3 +472,23 @@ func TestOverTCP(t *testing.T) {
 		t.Fatal(resp.StatusCode)
 	}
 }
+
+func TestWrongMethodAndUnknownPathAreJSON(t *testing.T) {
+	e := newEnv(t)
+	for _, c := range []struct{ method, target, allow string }{
+		{"GET", "/api/artifacts", "POST"},
+		{"PUT", "/api/artifacts/" + unknown, "DELETE, GET, HEAD"},
+		{"GET", "/api/nope", ""},
+		{"GET", "/api/artifacts/", ""},
+	} {
+		rec := e.do(c.method, c.target, nil, nil)
+		if c.allow == "" {
+			assertJSONError(t, rec, 404)
+			continue
+		}
+		assertJSONError(t, rec, 405)
+		if got := rec.Header().Get("Allow"); got != c.allow {
+			t.Errorf("%s %s: Allow %q", c.method, c.target, got)
+		}
+	}
+}

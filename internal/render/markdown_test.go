@@ -215,3 +215,10 @@ func TestMarkdownWaitEndsWithContext(t *testing.T) {
 		t.Errorf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestTableIsWrappedInScrollContainer(t *testing.T) {
+	out := md1(t, "|a|b|\n|-|-|\n|1|2|")
+	if !strings.HasPrefix(out, `<div class="tbl"><table>`) || strings.Count(out, "</table></div>") != 1 {
+		t.Errorf("table: %s", out)
+	}
+}

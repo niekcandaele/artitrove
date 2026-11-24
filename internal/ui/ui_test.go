@@ -225,10 +225,10 @@ func TestRenderArtifactKinds(t *testing.T) {
 		not   []string
 	}{
 		{render.KindHTML, "text/html", "Open full page",
-			[]string{`<body class="page-html">`, `<iframe sandbox="allow-scripts" src="/a/` + testID + `/raw" title="Latency report">`},
+			[]string{`<body class="page-html">`, `<iframe sandbox="allow-scripts" src="/a/` + testID + `/raw" title="Latency report">`, `<h1 title="Latency report">`},
 			[]string{"reading", `class="foot"`, "highlight.css"}},
 		{render.KindMarkdown, "text/markdown", "Open raw",
-			[]string{`<article class="reading">` + mdBody + `</article>`, `<link rel="stylesheet" href="/static/highlight.css">`, `class="foot"`}, nil},
+			[]string{`<article class="reading">` + mdBody + `</article>`, `<link rel="stylesheet" href="/static/highlight.css">`, `class="foot"`}, []string{`<h1 title=`}},
 		{render.KindJSON, "application/json", "Open raw",
 			[]string{`<div class="json-view">` + jsonBody + `</div>`}, []string{"highlight.css"}},
 		{render.KindText, "text/plain", "Open raw", []string{`<pre class="text">`}, nil},
@@ -247,7 +247,7 @@ func TestRenderArtifactKinds(t *testing.T) {
 			p.Text = "hello"
 			body := artifactBody(t, p)
 			for _, w := range append(c.want,
-				`<h1><bdi>Latency report</bdi></h1>`,
+				`<bdi>Latency report</bdi></h1>`,
 				`<bdi>`+c.ct+`</bdi>`, `<span>38 kB</span>`,
 				`<time datetime="2026-11-24T14:02:11Z">24 Nov 2026, 14:02 UTC</time>`,
 				`<a class="btn" href="/a/`+testID+`/raw">`, `<span class="txt">`+c.label+`</span>`,
@@ -261,7 +261,7 @@ func TestRenderArtifactKinds(t *testing.T) {
 					t.Errorf("unexpected %q", n)
 				}
 			}
-			if c.kind == render.KindHTML && !regexp.MustCompile(`</header>\s*<iframe`).MatchString(body) {
+			if c.kind == render.KindHTML && !regexp.MustCompile(`</header>\s*<main>\s*<iframe`).MatchString(body) {
 				t.Error("iframe must directly follow the header")
 			}
 			if c.kind == render.KindMarkdown && strings.Index(body, "highlight.css") > strings.Index(body, "app.css") {
@@ -310,8 +310,11 @@ func TestHostileStringsArtifact(t *testing.T) {
 			p := page(kind)
 			p.Title, p.ContentType, p.URL, p.Text, p.SHA256 = h, h, h, h, h
 			body := artifactBody(t, p)
-			if got := between(body, "<h1><bdi>", "</bdi></h1>"); got != h {
+			if got := between(body, "<bdi>", "</bdi></h1>"); got != h {
 				t.Errorf("%q/%s: title round-trip %q", h, kind, got)
+			}
+			if got := between(body, `<h1 title="`, `">`); kind == render.KindHTML && got != h {
+				t.Errorf("%q: h1 title attribute round-trip %q", h, got)
 			}
 			if got := between(body, `<span class="type type-`+string(kind)+`"><bdi>`, "</bdi>"); got != h {
 				t.Errorf("%q/%s: type round-trip %q", h, kind, got)

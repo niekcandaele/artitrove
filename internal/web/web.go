@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/niekcandaele/artitrove/internal/artifact"
 	"github.com/niekcandaele/artitrove/internal/config"
@@ -19,6 +20,10 @@ import (
 )
 
 const staticCacheControl = "public, max-age=3600"
+
+// maxTextPreview bounds the text shown inline: the browser lays out one wrapped block very slowly
+// beyond a few hundred KiB. The raw route has the whole file.
+const maxTextPreview = 512 << 10
 
 // Register attaches:
 //
@@ -95,7 +100,7 @@ func view(cfg config.Config, store artifact.Store, raw http.Handler) http.Handle
 				case errors.Is(err, render.ErrTooLarge):
 					kind = render.KindText
 				case err != nil:
-					serverError(w, "render markdown", err)
+					viewServerError(w, "render markdown", err)
 					return
 				}
 			case render.KindJSON:
@@ -106,12 +111,19 @@ func view(cfg config.Config, store artifact.Store, raw http.Handler) http.Handle
 				}
 			}
 			if kind == render.KindText {
+				if len(src) > maxTextPreview {
+					n := maxTextPreview
+					for n > maxTextPreview-utf8.UTFMax && !utf8.RuneStart(src[n]) {
+						n--
+					}
+					src, page.Truncated = src[:n], true
+				}
 				page.Text = strings.ToValidUTF8(string(src), "�")
 			}
 		}
 		page.Kind = kind
 		if err := ui.RenderArtifact(w, page); err != nil {
-			serverError(w, "render artifact", err)
+			viewServerError(w, "render artifact", err)
 		}
 	})
 }
@@ -127,11 +139,19 @@ func readContent(r *http.Request, store artifact.Store, id string) ([]byte, erro
 
 func viewError(w http.ResponseWriter, err error) {
 	if !errors.Is(err, artifact.ErrNotFound) {
-		serverError(w, "load artifact", err)
+		viewServerError(w, "load artifact", err)
 		return
 	}
 	if err := ui.RenderNotFound(w); err != nil {
 		serverError(w, "render not found", err)
+	}
+}
+
+// viewServerError answers a browser on the human view with an HTML page instead of JSON.
+func viewServerError(w http.ResponseWriter, msg string, err error) {
+	slog.Error(msg, "error", err)
+	if err := ui.RenderServerError(w); err != nil {
+		serverError(w, "render server error", err)
 	}
 }
 
