@@ -343,7 +343,7 @@ func TestViewHighlightBudget(t *testing.T) {
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("view took %v", d)
 	}
-	if n := strings.Count(page, "hl-chroma"); n == 0 || n > 3 {
-		t.Errorf("highlighted blocks = %d, want 1 to 3 of 15", n)
+	if n := strings.Count(page, "hl-chroma"); n != 2 {
+		t.Errorf("highlighted blocks = %d, want 2 of 15 (8 KiB budget, 3002-byte blocks)", n)
 	}
 }

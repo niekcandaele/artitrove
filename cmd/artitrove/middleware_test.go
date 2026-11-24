@@ -81,19 +81,25 @@ func TestReadDeadlines(t *testing.T) {
 		return c
 	}
 
-	// An unauthenticated request that never sends its declared body is cut off.
-	c := dial()
-	_, _ = io.WriteString(c, "GET /healthz HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\n")
-	start := time.Now()
-	if _, err := io.ReadAll(c); err != nil {
-		t.Fatalf("connection was not closed by the server: %v", err)
-	}
-	if time.Since(start) > 3*time.Second {
-		t.Errorf("closed after %v, want about %v", time.Since(start), defaultReadTimeout)
+	// An unauthenticated request that never sends its declared body is cut off, including an
+	// upload with a wrong token: only a valid token extends the deadline.
+	for _, req := range []string{
+		"GET /healthz HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\n",
+		"POST /api/artifacts HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer wrong-token-0123456789\r\nContent-Length: 1000\r\n\r\n",
+	} {
+		c := dial()
+		_, _ = io.WriteString(c, req)
+		start := time.Now()
+		if _, err := io.ReadAll(c); err != nil {
+			t.Fatalf("%q: connection was not closed by the server: %v", req, err)
+		}
+		if time.Since(start) > 3*time.Second {
+			t.Errorf("%q: closed after %v, want about %v", req, time.Since(start), defaultReadTimeout)
+		}
 	}
 
 	// A token holder can upload more slowly than the default deadline.
-	c = dial()
+	c := dial()
 	_, _ = io.WriteString(c, "POST /api/artifacts HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer "+cfg.Token+"\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\nab")
 	time.Sleep(2 * defaultReadTimeout)
 	_, _ = io.WriteString(c, "cd")
