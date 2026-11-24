@@ -1,0 +1,30 @@
+---
+name: ci
+"on":
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        run: make lint
+      - name: test
+        run: go test -race ./...
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: docker build
+        run: docker build -t artitrove:ci .
