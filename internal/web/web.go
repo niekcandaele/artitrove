@@ -34,8 +34,8 @@ const staticCacheControl = "public, max-age=3600"
 // (case-insensitive, parameters stripped, q=0 counts as absent, */* does NOT count) it calls
 // raw.ServeHTTP(w, r) and does nothing else; raw is api.RawHandler, which reads
 // r.PathValue("id"). Otherwise it calls ui.RenderArtifact; only Markdown, JSON and Text
-// content is opened, and invalid JSON becomes KindText. An unknown or invalid id gives
-// ui.RenderNotFound.
+// content is opened, and invalid JSON or Markdown too large to render (render.ErrTooLarge)
+// becomes KindText. An unknown or invalid id gives ui.RenderNotFound.
 //
 // With cfg.Index true, the landing page and its 401 carry "Cache-Control: no-store" because
 // the list holds credentials. Basic auth accepts any username with the token as password,

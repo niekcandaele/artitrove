@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"errors"
 	"html"
 	"regexp"
 	"strings"
@@ -174,6 +175,9 @@ func FuzzMarkdown(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, src []byte) {
 		out, err := Markdown(t.Context(), src)
+		if errors.Is(err, ErrTooLarge) {
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

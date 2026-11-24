@@ -32,7 +32,7 @@ const (
 // ErrTooLarge means the source is over the size that is rendered; callers show it as text.
 var ErrTooLarge = errors.New("markdown source too large to render")
 
-var renderSlots = make(chan struct{}, max(1, runtime.NumCPU()/2))
+var renderSlots = make(chan struct{}, max(1, runtime.GOMAXPROCS(0)/2))
 
 // The extensions are listed one by one: extension.GFM would register a second table renderer
 // that emits style= attributes. Attribute syntax and auto heading IDs stay off, so
@@ -68,7 +68,7 @@ func newMarkdown(budget int) goldmark.Markdown {
 //     The scheme stripping above still applies.
 //
 // The output contains no style attributes and no script. Errors: ErrTooLarge, and those from
-// goldmark's Convert. At most NumCPU/2 renders run at once; others wait, and return ctx.Err()
+// goldmark's Convert. At most GOMAXPROCS/2 renders run at once; others wait, and return ctx.Err()
 // if ctx ends first, so a client that went away does not leave queued work behind.
 func Markdown(ctx context.Context, src []byte) (template.HTML, error) {
 	if len(src) > maxMarkdownSize {
@@ -245,9 +245,9 @@ func (r *nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.No
 		seg := n.Lines().At(i)
 		code.Write(seg.Value(source))
 	}
-	if code.Len() <= r.budget {
+	if lexer := lookupLexer(string(n.Language(source))); lexer != nil && code.Len() <= r.budget {
 		r.budget -= code.Len()
-		if highlighted, ok := highlight(string(n.Language(source)), code.String()); ok {
+		if highlighted, ok := highlight(lexer, code.String()); ok {
 			_, _ = w.WriteString(highlighted)
 			return ast.WalkSkipChildren, nil
 		}
@@ -258,16 +258,17 @@ func (r *nodeRenderer) renderFenced(w util.BufWriter, source []byte, node ast.No
 	return ast.WalkSkipChildren, nil
 }
 
-// highlight reports false when the language is unknown or highlighting fails, e.g. on a
-// regexp timeout; the caller then shows the plain escaped block.
-func highlight(lang, code string) (string, bool) {
+// lookupLexer returns nil for an absent or unknown language.
+func lookupLexer(lang string) chroma.Lexer {
 	if lang == "" {
-		return "", false
+		return nil
 	}
-	lexer := lexers.Get(lang)
-	if lexer == nil {
-		return "", false
-	}
+	return lexers.Get(lang)
+}
+
+// highlight reports false when highlighting fails, e.g. on a regexp timeout; the caller then
+// shows the plain escaped block.
+func highlight(lexer chroma.Lexer, code string) (string, bool) {
 	it, err := chroma.Coalesce(lexer).Tokenise(nil, code)
 	if err != nil {
 		return "", false

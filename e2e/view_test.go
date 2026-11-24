@@ -323,14 +323,14 @@ func TestNoExternalRequests(t *testing.T) {
 func TestViewOversizedMarkdownFallsBackToText(t *testing.T) {
 	t.Parallel()
 	s := newServer(t)
-	a := s.upload(t, []byte(strings.Repeat("[a](", 50000)), "text/markdown", "")
+	a := s.upload(t, []byte("<b>x</b>"+strings.Repeat("[a](", 50000)), "text/markdown", "")
 	start := time.Now()
 	page := htmlView(t, s, a.ID)
 	if d := time.Since(start); d > 5*time.Second {
 		t.Errorf("view took %v", d)
 	}
-	contains(t, "plain text body", page, "[a]([a](")
-	lacks(t, "page", page, "<a href")
+	contains(t, "plain text body", page, "&lt;b&gt;x&lt;/b&gt;[a]([a](")
+	lacks(t, "page", page, "<b>x")
 }
 
 func TestViewHighlightBudget(t *testing.T) {
@@ -339,8 +339,11 @@ func TestViewHighlightBudget(t *testing.T) {
 	block := "```crystal\n" + strings.Repeat("1", 3000) + "x\n```\n\n"
 	a := s.upload(t, []byte(strings.Repeat(block, 15)), "text/markdown", "")
 	start := time.Now()
-	htmlView(t, s, a.ID)
+	page := htmlView(t, s, a.ID)
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("view took %v", d)
+	}
+	if n := strings.Count(page, "hl-chroma"); n == 0 || n > 3 {
+		t.Errorf("highlighted blocks = %d, want 1 to 3 of 15", n)
 	}
 }

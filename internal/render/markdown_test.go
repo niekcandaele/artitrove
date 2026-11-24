@@ -192,6 +192,14 @@ func TestMarkdownHighlightBudgetIsPerDocument(t *testing.T) {
 	}
 }
 
+func TestMarkdownHighlightBudgetSkipsUnhighlightedFences(t *testing.T) {
+	plain := strings.Repeat("x\n", highlightBudget/4) // the two fences together use the whole budget
+	out := md1(t, "```\n"+plain+"```\n\n```nosuchlang\n"+plain+"```\n\n```go\nfunc main() {}\n```\n")
+	if !strings.Contains(out, "hl-chroma") {
+		t.Errorf("go block not highlighted after unlabeled and unknown fences: %.200s", out[len(out)-300:])
+	}
+}
+
 func TestMarkdownWaitEndsWithContext(t *testing.T) {
 	for range cap(renderSlots) {
 		renderSlots <- struct{}{}
