@@ -18,26 +18,19 @@ func TestHighlightCSS(t *testing.T) {
 			t.Errorf("style %s missing", name)
 		}
 	}
-	const media = "@media (prefers-color-scheme: dark) {"
-	if strings.Count(css, media) != 1 {
-		t.Fatal("want one media block")
+	const lightMedia, darkMedia = "@media not all and (prefers-color-scheme: dark) {\n", "}\n@media (prefers-color-scheme: dark) {\n"
+	light, dark, ok := strings.Cut(strings.TrimPrefix(css, lightMedia), darkMedia)
+	if !strings.HasPrefix(css, lightMedia) || !ok || !strings.HasSuffix(dark, "}\n") {
+		t.Fatalf("want a light and a dark media block: %.200s", css)
 	}
-	light, dark, _ := strings.Cut(css, media)
-	if strings.Contains(css, "<") || !strings.Contains(css, ".hl-chroma .hl-k") {
+	if strings.Contains(css, "<") || !strings.Contains(light, ".hl-chroma .hl-k") || !strings.Contains(dark, ".hl-chroma .hl-k") {
 		t.Error("unexpected css content")
 	}
-	rule := regexp.MustCompile(`(?m)^(?:/\*.*\*/ )?([^{\n]+)\{([^}]*)\}`)
-	darkSelectors := map[string]bool{}
-	for _, m := range rule.FindAllStringSubmatch(dark, -1) {
-		darkSelectors[strings.TrimSpace(m[1])] = true
-	}
-	for _, m := range rule.FindAllStringSubmatch(light, -1) {
+	rule := regexp.MustCompile(`(?m)^(?:/\*.*\*/ )?([^{\n]+)\{`)
+	for _, m := range rule.FindAllStringSubmatch(light+dark, -1) {
 		sel := strings.TrimSpace(m[1])
-		if !strings.HasPrefix(sel, ".hl-chroma") && !strings.HasPrefix(sel, ".hl-bg") {
+		if !strings.HasPrefix(sel, ".hl-chroma") && sel != ".hl-bg" {
 			t.Errorf("unscoped selector %q", sel)
-		}
-		if strings.Contains(m[2], "color:") && !darkSelectors[sel] {
-			t.Errorf("light selector %q has no dark counterpart", sel)
 		}
 	}
 }
