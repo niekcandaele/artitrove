@@ -66,6 +66,7 @@ Response `201 Created`, with a `Location` header set to `url`:
 ```
 
 - Empty body: `400`.
+- A `Content-Type` longer than 255 bytes, or a malformed query string: `400`.
 - Body larger than `ARTITROVE_MAX_SIZE`: `413`. The limit is enforced while reading, not after.
 
 ### `GET /a/{id}/raw` (link)
@@ -106,10 +107,19 @@ A slim header shows the title, content type, size, creation time, and two action
 | Content type | Rendering |
 |---|---|
 | `text/html` | `<iframe sandbox="allow-scripts" src="/a/{id}/raw">`, filling the viewport below the header |
-| `text/markdown` | Rendered to HTML server-side, with syntax-highlighted code blocks. Images with a same-origin relative URL are shown; any other image becomes a link, because the page CSP blocks external images. |
+| `text/markdown` | Rendered to HTML server-side, with syntax-highlighted code blocks (limits below). Images with a same-origin relative URL are shown; any other image becomes a link, because the page CSP blocks external images. |
 | `application/json` | Pretty-printed, collapsible tree. Invalid JSON falls back to plain text. |
 | `text/*` and common code types | Monospace, with line wrapping |
 | Anything else | Type, size and a download link to the raw URL |
+
+Rendering untrusted content has a cost any link holder can trigger, so the human view bounds it. The raw URL always returns the whole file.
+
+| Limit | Value | Beyond it |
+|---|---|---|
+| Markdown size | 64 KiB | Shown as plain text |
+| Highlighted code per Markdown document | 8 KiB | Later code blocks are shown without highlighting |
+| JSON tree size | 512 KiB | Shown as plain text |
+| Text preview | 512 KiB | Truncated, with a note pointing to the raw URL |
 
 The view is mobile-first, follows the system light or dark theme, and makes zero external requests: all CSS, JS and fonts are embedded in the binary.
 
@@ -134,7 +144,7 @@ All configuration is by environment variable.
 | `ARTITROVE_BASE_URL` | `http://localhost:8080` | Used to build `url` and `raw_url`. Scheme and host only: no path, no trailing slash. |
 | `ARTITROVE_LISTEN` | `:8080` | Listen address |
 | `ARTITROVE_DATA_DIR` | `./data` | Created on start if missing |
-| `ARTITROVE_MAX_SIZE` | `10485760` | Max upload size in bytes (10 MB) |
+| `ARTITROVE_MAX_SIZE` | `10485760` | Max upload size in bytes (10 MiB) |
 | `ARTITROVE_INDEX` | `false` | Enables the browsable index on `/` |
 
 ## Storage
@@ -152,6 +162,8 @@ On upload, the content is written to a temp file in the data directory, fsynced,
 - `html/template` with templates and static assets embedded via `embed`.
 - No JS build step. Client-side JS is small, hand-written, and optional for reading.
 - Graceful shutdown on SIGINT and SIGTERM.
+- Read deadlines: 10 seconds for request headers, 30 seconds for a request body, one hour for an upload body.
+- `artitrove healthcheck` requests `/healthz` on the configured listen address and exits 0 or 1. The container image uses it as its health check.
 - Lint with `make lint`, which pins a golangci-lint release that supports this Go version. A bare `golangci-lint run` may fail on an older local binary.
 
 ## Repository layout
@@ -170,7 +182,7 @@ Each package has one owner task. Tasks do not edit outside their package.
 | `internal/web/` | `/a/{id}` human view, `/` landing page and index |
 | `e2e/` | Black-box tests that run the real binary |
 | `skill/artitrove/` | The agent skill (`SKILL.md`) |
-| root | `Dockerfile`, `compose.yaml`, `README.md`, `.github/workflows/ci.yml` |
+| root | `Dockerfile`, `compose.yaml`, `README.md`, `LICENSE`, `.github/workflows/` (`ci.yml`, `release.yml`) |
 
 ## Git conventions
 
