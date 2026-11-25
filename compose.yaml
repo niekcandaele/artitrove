@@ -1,7 +1,7 @@
 ---
 services:
   artitrove:
-    build: .
+    image: ghcr.io/niekcandaele/artitrove:${ARTITROVE_VERSION:-latest}
     restart: unless-stopped
     ports:
       # ARTITROVE_PORT is a bare port number, not host:port.

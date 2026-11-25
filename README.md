@@ -6,14 +6,16 @@ It is a single Go binary with one data directory. It has one owner and no users,
 
 ## Quick start
 
-Run the service with Docker Compose from a checkout of this repository. Generate a token and save it in `.env`, which Compose reads automatically:
+Run the released image with Docker Compose. Download the compose file, then generate a token and save it in `.env`, which Compose reads automatically:
 
 ```sh
+mkdir artitrove && cd artitrove
+curl -sSLO https://raw.githubusercontent.com/niekcandaele/artitrove/main/compose.yaml
 echo "ARTITROVE_TOKEN=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-The service listens on port 8080. To use another host port, set `ARTITROVE_PORT` in `.env`. If clients reach the service under an address other than `http://localhost:<port>`, set `ARTITROVE_BASE_URL` in `.env` as well, because it builds the links the service returns. Compose also forwards `ARTITROVE_INDEX` and `ARTITROVE_MAX_SIZE`. Data lives in the `artitrove-data` volume.
+The service listens on port 8080. To use another host port, set `ARTITROVE_PORT` in `.env`. If clients reach the service under an address other than `http://localhost:<port>`, set `ARTITROVE_BASE_URL` in `.env` as well, because it builds the links the service returns. Compose also forwards `ARTITROVE_INDEX` and `ARTITROVE_MAX_SIZE`. To pin a release, set `ARTITROVE_VERSION` (for example `0.0.1`); the default is `latest`. Data lives in the `artitrove-data` volume.
 
 Check that the service is up, then upload a file:
 
@@ -32,7 +34,13 @@ curl -sS --fail-with-body -X POST "$ARTITROVE_URL/api/artifacts" \
 
 The response is JSON. Open its `url` in a browser to see the rendered page. Always send a `Content-Type` header: without one, curl labels the body as a form post and that is what gets stored.
 
-To run without Docker, use `make run` with `ARTITROVE_TOKEN` set.
+To run without Docker, download the binary for your platform from the [releases page](https://github.com/niekcandaele/artitrove/releases) and start it with `ARTITROVE_TOKEN` set:
+
+```sh
+curl -sSL -o artitrove https://github.com/niekcandaele/artitrove/releases/latest/download/artitrove-linux-amd64
+chmod +x artitrove
+ARTITROVE_TOKEN=$(openssl rand -hex 32) ./artitrove
+```
 
 ## Configure the service
 
@@ -110,4 +118,17 @@ make lint    # pinned golangci-lint
 make run     # needs ARTITROVE_TOKEN
 ```
 
+To run a local build in Compose, build the image under a tag of your own and select it:
+
+```sh
+docker build -t ghcr.io/niekcandaele/artitrove:dev .
+ARTITROVE_VERSION=dev docker compose up -d
+```
+
 `artitrove healthcheck` probes the running service and is what the container healthcheck calls. `SPEC.md` is the specification for v1.
+
+Pushing a `v*` tag runs the release workflow, which publishes the multi-arch image to `ghcr.io/niekcandaele/artitrove` and attaches Linux and macOS binaries to a GitHub release.
+
+## License
+
+MIT. See `LICENSE`.
